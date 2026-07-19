@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EMPIRE ETERNAL — Prototype</title>
+<style>
+  :root{ --gold:#e8b64c; --bg:#0d0a1a; --panel:#1a1530; --red:#e05252; --purple:#8b5cf6; --green:#4ade80; }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body{ background:#000; font-family:-apple-system, 'Segoe UI', sans-serif; color:#eee; display:flex; justify-content:center; }
+  #app{ width:100%; max-width:430px; min-height:100vh; background:linear-gradient(180deg,#0d0a1a 0%,#141026 100%); display:flex; flex-direction:column; }
+  header{ padding:10px 14px 6px; text-align:center; border-bottom:1px solid #2a2350; }
+  header h1{ font-size:15px; letter-spacing:3px; color:var(--gold); }
+  header h1 span{ color:var(--purple); }
+  #resbar{ display:flex; justify-content:space-around; padding:8px 4px; font-size:13px; background:#120e24; border-bottom:1px solid #2a2350; }
+  #resbar b{ color:var(--gold); }
+  #screen{ flex:1; overflow-y:auto; padding:12px; }
+  nav{ display:flex; border-top:1px solid #2a2350; background:#120e24; }
+  nav button{ flex:1; background:none; border:none; color:#888; font-size:11px; padding:10px 2px; cursor:pointer; }
+  nav button.on{ color:var(--gold); }
+  nav button .ic{ font-size:19px; display:block; }
+  .card{ background:var(--panel); border:1px solid #2a2350; border-radius:12px; padding:12px; margin-bottom:10px; }
+  .card h3{ font-size:13px; color:var(--gold); margin-bottom:6px; letter-spacing:1px; }
+  .btn{ display:block; width:100%; padding:13px; margin:8px 0; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; background:linear-gradient(135deg,var(--gold),#c9932f); color:#1a1206; }
+  .btn.alt{ background:linear-gradient(135deg,var(--purple),#6d28d9); color:#fff; }
+  .btn.danger{ background:linear-gradient(135deg,var(--red),#b91c1c); color:#fff; }
+  .btn.ghost{ background:#241d42; color:#ccc; }
+  .btn:disabled{ opacity:.4; }
+  .row{ display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:14px; border-bottom:1px dashed #2a2350; }
+  .row:last-child{ border-bottom:none; }
+  .tag{ font-size:10px; padding:2px 7px; border-radius:8px; background:#2a2350; color:#bbb; }
+  .tag.ssr{ background:var(--gold); color:#000; font-weight:800; }
+  .tag.dead{ background:var(--red); color:#fff; }
+  #journal{ font-size:12px; color:#9a90c0; max-height:150px; overflow-y:auto; }
+  #journal div{ padding:3px 0; border-bottom:1px solid #1c1636; }
+  .overlay{ position:fixed; inset:0; background:rgba(5,3,15,.92); display:none; align-items:center; justify-content:center; z-index:50; }
+  .overlay.show{ display:flex; }
+  .modal{ width:90%; max-width:390px; background:var(--panel); border:1px solid var(--gold); border-radius:16px; padding:18px; text-align:center; }
+  .modal h2{ color:var(--gold); font-size:17px; margin-bottom:10px; letter-spacing:1px; }
+  #mdTimer{ height:8px; background:#2a2350; border-radius:4px; overflow:hidden; margin:10px 0; }
+  #mdTimerBar{ height:100%; width:100%; background:linear-gradient(90deg,var(--green),var(--gold),var(--red)); transition:width .1s linear; }
+  #pullAnim{ font-size:44px; margin:12px 0; min-height:60px; }
+  .flash{ animation:fl .5s; } @keyframes fl{ 0%{transform:scale(.5);opacity:0} 60%{transform:scale(1.15)} 100%{transform:scale(1);opacity:1} }
+  #notif{ position:fixed; top:0; left:50%; transform:translateX(-50%); width:100%; max-width:430px; background:linear-gradient(135deg,#3b0764,#6d28d9); color:#fff; font-size:13px; padding:10px 14px; display:none; z-index:99; border-bottom:1px solid var(--gold); }
+  #battlelog{ font-size:13px; min-height:90px; }
+  #battlelog div{ padding:2px 0; animation:fl .4s; }
+  .bar{ height:10px; background:#2a2350; border-radius:5px; overflow:hidden; margin:4px 0 8px; }
+  .bar i{ display:block; height:100%; transition:width .5s; }
+  .gold{ color:var(--gold); } .red{ color:var(--red); } .green{ color:var(--green); } .purp{ color:var(--purple); }
+  .small{ font-size:11px; color:#8a80b0; }
+</style>
+</head>
+<body>
+<div id="notif"></div>
+<div id="app">
+  <header><h1>⚔️ EMPIRE <span>ETERNAL</span></h1><div class="small">prototype v0.1 — Arène des Légendes</div></header>
+  <div id="resbar">
+    <span>🪙 <b id="rGold">0</b></span>
+    <span>💎 <b id="rGems">0</b></span>
+    <span>⚡ <b id="rEnergy">0</b></span>
+    <span>📅 <b id="rDay">1</b></span>
+    <span>👑 <b id="rVip">VIP 0</b></span>
+  </div>
+  <div id="screen"></div>
+  <nav id="tabs">
+    <button data-t="empire" class="on"><span class="ic">🏰</span>Empire</button>
+    <button data-t="combat"><span class="ic">⚔️</span>Combat</button>
+    <button data-t="gacha"><span class="ic">🎰</span>Invocation</button>
+    <button data-t="dynastie"><span class="ic">👑</span>Dynastie</button>
+    <button data-t="shop"><span class="ic">💎</span>Boutique</button>
+  </nav>
+</div>
+
+<!-- OVERLAY : MOMENT DÉCISIF -->
+<div class="overlay" id="ovMD">
+  <div class="modal">
+    <h2>⚡ MOMENT DÉCISIF</h2>
+    <div class="small">⌚ Sang-Froid : votre rythme cardiaque est transmis à votre général…</div>
+    <div id="mdTimer"><div id="mdTimerBar"></div></div>
+    <button class="btn danger" onclick="decisif('charge')">🐺 CHARGE HÉROÏQUE</button>
+    <button class="btn alt" onclick="decisif('retraite')">🛡️ RETRAITE TACTIQUE</button>
+    <button class="btn" onclick="decisif('ultime')">🔥 ULTIME DÉCHAÎNÉ</button>
+  </div>
+</div>
+
+<!-- OVERLAY : RAPPORT DE GUERRE -->
+<div class="overlay" id="ovReport">
+  <div class="modal">
+    <h2>📜 RAPPORT DE GUERRE</h2>
+    <div id="reportBody" style="text-align:left;font-size:13px;max-height:300px;overflow-y:auto"></div>
+    <button class="btn" onclick="closeReport()">Fermer</button>
+  </div>
+</div>
+
+<script>
+// ================= STATE =================
+const RANKS = ['Soldat','Capitaine','Fléau','Bourreau','Seigneur de Guerre'];
+const NAMES = ['Sylvara','Duncan','Isolde','Ragnar','Elowen','Cedric','Morgane','Theron','Lyanna','Varen','Sacha II','Aelith'];
+let S = {
+  player:'Sacha', day:1, gold:500, gems:800, energy:100, pity:0, pulls:0, spent:0,
+  heroes:[
+    {name:'Maeve', age:24, power:820, alive:true, gen:1},
+    {name:'Aldric', age:58, power:640, alive:true, gen:1},
+  ],
+  nemesis:{ name:'Kaeltherion', rank:0, wins:0, taunt:'Je t\'attendais, petit empire.', margin:null },
+  journal:[], pendingHeir:null, vengeanceUntil:0
+};
+function save(){ try{ localStorage.setItem('empire', JSON.stringify(S)); }catch(e){} }
+function load(){ try{ const d=localStorage.getItem('empire'); if(d) S=JSON.parse(d); }catch(e){} }
+load();
+
+// ================= UTILS =================
+const $ = id => document.getElementById(id);
+const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+function log(msg){ S.journal.unshift(`J${S.day} — ${msg}`); S.journal=S.journal.slice(0,40); }
+function notif(msg){ const n=$('notif'); n.textContent=msg; n.style.display='block'; setTimeout(()=>n.style.display='none',3500); }
+function teamPower(){ return S.heroes.filter(h=>h.alive).reduce((s,h)=>s+h.power,0); }
+function nemPower(){ return Math.round(teamPower() * (1.04 + 0.06*S.nemesis.wins)); }
+function vip(){ const t=[0,10,30,60,100,250,500,1000]; let v=0; t.forEach((x,i)=>{ if(S.spent>=x) v=i; }); return v; }
+function render(){
+  $('rGold').textContent=S.gold; $('rGems').textContent=S.gems;
+  $('rEnergy').textContent=S.energy; $('rDay').textContent=S.day; $('rVip').textContent='VIP '+vip();
+  save();
+}
+
+// ================= NAVIGATION =================
+let tab='empire';
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{ tab=b.dataset.t;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b)); draw(); });
+
+function draw(){
+  render();
+  ({empire:drawEmpire, combat:drawCombat, gacha:drawGacha, dynastie:drawDynastie, shop:drawShop})[tab]();
+}
+
+// ================= EMPIRE =================
+function drawEmpire(){
+  const alive=S.heroes.filter(h=>h.alive);
+  $('screen').innerHTML=`
+    <div class="card"><h3>🏰 VOTRE EMPIRE — ${S.player}</h3>
+      <div class="row"><span>Puissance totale</span><b class="gold">${teamPower()}</b></div>
+      <div class="row"><span>Héros vivants</span><b>${alive.length}</b></div>
+      <div class="row"><span>Némésis actif</span><b class="red">${S.nemesis.name} (${RANKS[S.nemesis.rank]})</b></div>
+    </div>
+    <button class="btn ghost" onclick="night()">🌙 Passer la nuit (le monde continue de brûler…)</button>
+    <div class="card"><h3>📓 JOURNAL DE GUERRE</h3><div id="journal">${S.journal.map(j=>`<div>${j}</div>`).join('')||'<div>Chronique vierge.</div>'}</div></div>
+    <div class="card small">💸 Argent fictif dépensé : <b class="gold">${S.spent.toFixed(2)} €</b> — la machine à baleines vous observe.</div>`;
+}
+
+function night(){
+  S.day++; S.energy=100; S.gems+=50;
+  const R=[];
+  R.push(`<div>📅 <b>Jour ${S.day}</b> — pendant votre sommeil…</div>`);
+  // vieillissement : 1 nuit = 1 an
+  S.heroes.forEach(h=>{ if(!h.alive) return;
+    h.age++;
+    if(h.age>60){ h.power=Math.round(h.power*0.97); R.push(`<div>⏳ ${h.name} a ${h.age} ans. Ses forces déclinent… (${h.power})</div>`); }
+    if(h.age>72 && Math.random()<0.25){ h.alive=false; R.push(`<div class="red">💀 ${h.name} est mort de vieillesse à ${h.age} ans. Génération ${h.gen} s'éteint.</div>`); log(`${h.name} est mort à ${h.age} ans.`); }
+  });
+  // événement nocturne
+  const ev=Math.random();
+  if(ev<0.35 && S.heroes.some(h=>h.alive)){
+    const loss=Math.round(S.gold*0.10); S.gold-=loss; S.nemesis.wins++;
+    if(S.nemesis.rank<4 && S.nemesis.wins%2===0) S.nemesis.rank++;
+    S.nemesis.taunt=pick([`Ta défense était touchante. — ${S.nemesis.name}`,`J'ai pris ${loss} pièces pendant que tu dormais.`,`${S.heroes.find(h=>h.alive)?.name||'Tes murs'} vieillit… le temps joue pour moi.`]);
+    R.push(`<div class="red">🔴 ${S.nemesis.name} a pillé votre trésor à 4h12 ! −${loss} 🪙</div>`);
+    R.push(`<div class="purp">💬 « ${S.nemesis.taunt} »</div>`);
+    log(`${S.nemesis.name} a pillé votre or pendant la nuit.`);
+  } else if(ev<0.55){
+    const g=rnd(50,150); S.gold+=g;
+    R.push(`<div class="green">🛡️ Vos garnisons ont repoussé un raid. Butin : +${g} 🪙</div>`);
+  } else {
+    R.push(`<div>🌙 Nuit calme. Le front gronde au loin.</div>`);
+  }
+  // héritier disponible ?
+  const dead=S.heroes.find(h=>!h.alive);
+  if(dead && !S.pendingHeir){ S.pendingHeir=dead.name; R.push(`<div class="gold">👑 La lignée de <b>${dead.name}</b> peut se perpétuer → onglet Dynastie.</div>`); }
+  R.push(`<div class="small">+50 💎 récompense de connexion quotidienne</div>`);
+  $('reportBody').innerHTML=R.map(r=>`<div style="padding:4px 0;border-bottom:1px solid #2a2350">${r}</div>`).join('');
+  $('ovReport').classList.add('show');
+  draw();
+}
+function closeReport(){ $('ovReport').classList.remove('show'); draw(); }
+
+// ================= COMBAT + MOMENT DÉCISIF =================
+let battle=null;
+function drawCombat(){
+  const n=S.nemesis, np=nemPower(), fog=Math.round(np*0.15);
+  $('screen').innerHTML=`
+    <div class="card"><h3>⚔️ VOTRE NÉMÉSIS</h3>
+      <div class="row"><span><b class="red">${n.name}</b> <span class="tag">${RANKS[n.rank]}</span></span><span class="small">${n.wins} victoire(s) sur vous</span></div>
+      <div class="row"><span>Puissance estimée</span><b class="red">${np-fog} — ${np+fog} ?</b></div>
+      <div style="font-size:13px;color:#c0b0ff;padding:8px 0">💬 « ${n.taunt} »</div>
+    </div>
+    <div class="card"><h3>VOTRE ARMÉE</h3>
+      ${S.heroes.filter(h=>h.alive).map(h=>`<div class="row"><span>${h.name} <span class="small">(${h.age} ans, Gen ${h.gen})</span></span><b class="gold">${h.power}</b></div>`).join('')||'<div class="red">Aucun héros vivant !</div>'}
+      <div class="row"><span>Total</span><b class="gold">${teamPower()}</b></div>
+    </div>
+    <div id="battlezone"></div>
+    <button class="btn danger" ${S.energy<10||!S.heroes.some(h=>h.alive)?'disabled':''} onclick="startBattle()">⚔️ COMBATTRE ${n.name.toUpperCase()} (10 ⚡)</button>
+    <div class="small" style="text-align:center">Reconnaissance : 70% de sa composition est visible. Le reste est brouillard de guerre.</div>`;
+}
+function startBattle(){
+  S.energy-=10;
+  battle={ phase:'fight', log:[] };
+  const bz=$('battlezone');
+  bz.innerHTML=`<div class="card"><h3>⚔️ BATAILLE EN COURS</h3><div id="battlelog"></div><div class="bar"><i id="bb" style="width:0%;background:linear-gradient(90deg,var(--red),var(--gold))"></i></div></div>`;
+  const lines=['🎺 Les armées s\'affrontent…','🏹 Les archers de '+S.nemesis.name+' déciment votre avant-garde !','🛡️ Vos lignes tiennent… pour l\'instant.','⚡ '+S.nemesis.name+' avance sur votre flanc gauche !'];
+  let i=0;
+  const iv=setInterval(()=>{
+    if(i<lines.length){ $('battlelog').innerHTML+=`<div>${lines[i]}</div>`; $('bb').style.width=((i+1)*22)+'%'; i++; }
+    else{ clearInterval(iv); $('bb').style.width='92%'; openMD(); }
+  },700);
+}
+let mdT=null, mdStart=0;
+function openMD(){
+  $('ovMD').classList.add('show'); mdStart=Date.now();
+  let t=5.0;
+  $('mdTimerBar').style.width='100%';
+  mdT=setInterval(()=>{ t-=0.1; $('mdTimerBar').style.width=Math.max(0,t/5*100)+'%';
+    if(t<=0){ clearInterval(mdT); $('ovMD').classList.remove('show'); resolveBattle(pick(['charge','retraite','ultime']),true); } },100);
+}
+function decisif(choice){ clearInterval(mdT); $('ovMD').classList.remove('show'); resolveBattle(choice,false,(Date.now()-mdStart)/1000); }
+function resolveBattle(choice,panicked,reactT=9){
+  const enemy=pick(['charge','retraite','ultime']);
+  const beats={charge:'retraite',retraite:'ultime',ultime:'charge'};
+  let mod=0; if(beats[choice]===enemy) mod=0.25; else if(beats[enemy]===choice) mod=-0.25;
+  const sangFroid=(!panicked && reactT<2.0)?0.05:0; // ⌚ bonus calme
+  const my=Math.round(teamPower()*(0.9+Math.random()*0.2)*(1+mod+sangFroid));
+  const his=Math.round(nemPower()*(0.9+Math.random()*0.2));
+  const win=my>his, margin=Math.round(Math.abs(my-his)/Math.max(my,his)*100);
+  const bz=$('battlezone');
+  const choiceName={charge:'🐺 Charge héroïque',retraite:'🛡️ Retraite tactique',ultime:'🔥 Ultime déchaîné'}[choice];
+  let html=`<div class="card"><h3>RÉSULTAT</h3>
+    <div class="row"><span>Votre choix</span><b>${panicked?'😱 PANIQUE ! '+choiceName:choiceName}${sangFroid?' <span class="tag ssr">⌚ Sang-Froid +5%</span>':''}</b></div>
+    <div class="row"><span>${S.nemesis.name} a choisi</span><b class="red">${{charge:'🐺 Charge',retraite:'🛡️ Retraite',ultime:'🔥 Ultime'}[enemy]}</b></div>
+    <div class="row"><span>Score</span><b>${my} vs <span class="red">${his}</span></b></div>`;
+  if(win){
+    const g=250+50*S.nemesis.wins, gg=40;
+    S.gold+=g; S.gems+=gg;
+    if(S.nemesis.rank>0)S.nemesis.rank--; S.nemesis.wins=Math.max(0,S.nemesis.wins-1);
+    S.nemesis.taunt=pick(['Intéressant. À demain.','Tu as eu de la chance. Le brouillard t\'a sauvé.','Profite de cette victoire. J\'ai tout noté.']);
+    html+=`<div class="green" style="font-size:16px;padding:8px 0">🏆 <b>VENGEANCE ACCOMPLIE !</b> (+${g} 🪙, +${gg} 💎)</div>
+    <div class="purp">💬 ${S.nemesis.name} : « ${S.nemesis.taunt} »</div>`;
+    log(`Victoire de ${margin}% sur ${S.nemesis.name} !`);
+  } else {
+    const loss=Math.round(S.gold*0.15); S.gold-=loss;
+    S.nemesis.wins++; if(S.nemesis.rank<4)S.nemesis.rank++;
+    S.nemesis.margin=margin;
+    S.nemesis.taunt=pick([`Toujours aussi lent sur le flanc gauche, ${S.player} ?`,`${margin}% — c'est la distance entre toi et la victoire.`,`Ta défaite d'hier était belle. Celle-ci est meilleure.`]);
+    // mort au combat possible
+    let deathHtml='';
+    const alive=S.heroes.filter(h=>h.alive);
+    if(alive.length && Math.random()<0.12){
+      const d=pick(alive); d.alive=false; S.pendingHeir=d.name;
+      deathHtml=`<div class="red" style="padding:6px 0">💀 <b>${d.name} est tombé au combat</b>, à ${d.age} ans. Mort permanente. → Dynastie.</div>`;
+      log(`${d.name} est tombé au combat face à ${S.nemesis.name}.`);
+    }
+    html+=`<div class="red" style="font-size:16px;padding:8px 0">💀 DÉFAITE de ${margin}% — ${S.nemesis.name} devient <b>${RANKS[S.nemesis.rank]}</b> et vole ${loss} 🪙</div>
+      ${deathHtml}<div class="purp">💬 « ${S.nemesis.taunt} »</div>
+      <button class="btn" onclick="buyVengeance()">😈 PACK VENGEANCE −60% — 19,99€ <span class="small">(fictif)</span></button>`;
+    log(`Défaite face à ${S.nemesis.name} (${margin}%). Il vous a volé ${loss} or.`);
+  }
+  html+=`<button class="btn ghost" onclick="draw()">Continuer</button></div>`;
+  bz.innerHTML=html; render();
+}
+function buyVengeance(){
+  S.spent+=19.99; S.gems+=2000;
+  const h=S.heroes.find(x=>x.alive); if(h) h.power=Math.round(h.power*1.15);
+  notif('😈 +2000 💎 — votre armée gagne +15% de puissance. Kaeltherion tremble (pour l\'instant).');
+  log('Pack Vengeance acheté (19,99€ fictifs).'); draw();
+}
+
+// ================= GACHA =================
+function drawGacha(){
+  $('screen').innerHTML=`
+    <div class="card"><h3>🎰 PORTAIL DES ÂMES</h3>
+      <div class="row"><span>Taux SSR affiché</span><b>2,5%</b></div>
+      <div class="row"><span>Héros méta dans le pool</span><b class="red">0,3% 🤫</b></div>
+      <div class="row"><span>Pity</span><b class="${S.pity>75?'red':'gold'}">${S.pity}/90</b></div>
+      <div class="row"><span>Tirages totaux</span><b>${S.pulls}</b></div>
+      <div id="pullAnim"></div>
+      <div id="pullResult" style="min-height:30px;font-size:14px"></div>
+    </div>
+    <button class="btn alt" ${S.gems<160?'disabled':''} onclick="pull()">🔮 INVOQUER (160 💎)</button>
+    ${S.pity>=75?'<button class="btn" onclick="goShop()">💎 Le garanti est proche… recharger ?</button>':''}
+    <div class="small" style="text-align:center">Animation non skippable. Le suspense fait partie du produit.</div>`;
+}
+function goShop(){ document.querySelector('[data-t="shop"]').click(); }
+function pull(){
+  if(S.gems<160){ notif('💎 Gemmes insuffisantes. La boutique vous attend…'); return; }
+  S.gems-=160; S.pulls++; S.pity++;
+  $('pullResult').textContent='';
+  let i=0; const icons=['🌑','✨','⭐','💫','🌟'];
+  const iv=setInterval(()=>{ $('pullAnim').innerHTML=`<span class="flash">${icons[i%icons.length]}</span>`; i++; },180);
+  setTimeout(()=>{
+    clearInterval(iv);
+    const r=Math.random()*100;
+    let res, html;
+    if(S.pity>=90 || r<2.5){
+      S.pity=0;
+      const featured=Math.random()<0.12;
+      const h={name:featured?'🔥 KAELTHEA LA MÉTA':pick(NAMES), age:rnd(16,25), power:featured?rnd(1400,1600):rnd(1100,1300), alive:true, gen:1};
+      S.heroes.push(h);
+      html=`<span class="tag ssr">SSR !</span> <b class="gold">${h.name}</b> rejoint votre empire ! (${h.power}⚔️)${featured?' <span class="red">LE HÉROS MÉTA !</span>':''}`;
+      $('pullAnim').innerHTML='<span class="flash">🌟👑🌟</span>';
+      log(`Invocation SSR : ${h.name} !`); notif('🌟 SSR ! '+h.name+' vous rejoint !');
+    } else if(r<14.5){
+      const h={name:pick(NAMES), age:rnd(16,30), power:rnd(650,900), alive:true, gen:1};
+      S.heroes.push(h);
+      html=`<span class="tag">4★</span> ${h.name} (${h.power}⚔️)`;
+      $('pullAnim').innerHTML='<span class="flash">⭐</span>';
+    } else {
+      // near-miss : le casino tease
+      const tease=Math.random()<0.4;
+      const g=rnd(30,80); S.gold+=g;
+      html=`${tease?'<span class="red">✨ SSR… non !</span> ':''}<span class="tag">3★</span> +${g} 🪙`;
+      $('pullAnim').innerHTML='<span class="flash">🌑</span>';
+      if(tease) log('Near-miss au portail. Le cerveau retient ça. 😈');
+    }
+    $('pullResult').innerHTML=html;
+    draw(); $('pullResult').innerHTML=html; render();
+  },1600);
+}
+
+// ================= DYNASTIE =================
+function drawDynastie(){
+  $('screen').innerHTML=`
+    <div class="card"><h3>👑 LA DYNASTIE</h3>
+      ${S.heroes.map((h,i)=>`<div class="row">
+        <span>${h.alive?'':'💀 '}${h.name} <span class="small">Gen ${h.gen}</span>${h.alive?'':' <span class="tag dead">MORT</span>'}</span>
+        <span>${h.age} ans — ${h.power}⚔️</span></div>`).join('')}
+    </div>
+    ${S.pendingHeir?`
+    <div class="card"><h3>🕯️ LA LIGNÉE DE ${S.pendingHeir.toUpperCase()}</h3>
+      <div class="small" style="padding-bottom:8px">Un héritier peut reprendre le flambeau. Le mentor transmet son expérience… ou tout.</div>
+      <button class="btn" onclick="heir(false)">👶 Former un héritier (70% des stats)</button>
+      <button class="btn alt" ${S.gems<300?'disabled':''} onclick="heir(true)">🧪 Sérum de transmission — 300 💎 (100% des stats)</button>
+    </div>`:'<div class="card small">Vos héros vieillissent d\'un an par nuit. À 60 ans, le déclin. Puis la mort permanente. Préparez la succession.</div>'}
+    <div class="card small">💍 Élixir de jouvence, prêtres de résurrection… la boutique saura vous consoler.</div>`;
+}
+function heir(serum){
+  const idx=S.heroes.findIndex(h=>!h.alive && h.name===S.pendingHeir); if(idx<0) return;
+  const dead=S.heroes[idx];
+  if(serum){ if(S.gems<300) return; S.gems-=300; }
+  // Mémoire du clan : l'héritier s'entraîne sur les récits du défunt (plancher 500⚔️)
+  const base=Math.max(dead.power, 500);
+  const h={name:pick(NAMES)+' '+dead.name.slice(0,3)+'sson', age:16, gen:dead.gen+1,
+    power:Math.round(base*(serum?1.0:0.7)), alive:true};
+  S.heroes.splice(idx,1); // le défunt rejoint la Crypte (disparaît de la cour)
+  S.heroes.push(h); S.pendingHeir=null;
+  notif(`👑 ${h.name} (Gen ${h.gen}) prête serment. La lignée continue !`);
+  log(`Héritier : ${h.name} reprend le flambeau de ${dead.name} (${h.power}⚔️).`);
+  draw();
+}
+
+// ================= BOUTIQUE =================
+function drawShop(){
+  const packs=[
+    {n:'Pack du Débutant −90%', p:0.99, g:100, d:'Brise la barrière du premier paiement.'},
+    {n:'Carte Mensuelle', p:4.99, g:550, d:'Crée l\'habitude de connexion.'},
+    {n:'Pack Vengeance', p:19.99, g:2000, d:'Ciblé sur votre dernière défaite.'},
+    {n:'Pack Seigneur de Guerre', p:99.99, g:13000, d:'Pour les baleines. Vous en êtes une ?'},
+  ];
+  $('screen').innerHTML=`
+    <div class="card"><h3>💎 BOUTIQUE (argent fictif)</h3>
+      <div class="small">Total « dépensé » : <b class="gold">${S.spent.toFixed(2)} €</b> — Rang ${vip()>=5?'🐋 BALEINE CONFIRMÉE':vip()>=2?'Dauphin':'Menu fretin'}</div></div>
+    ${packs.map((p,i)=>`<div class="card"><div class="row"><span><b>${p.n}</b><br><span class="small">${p.d}</span></span><b class="gold">${p.g} 💎</b></div>
+      <button class="btn ${i>=2?'danger':'ghost'}" onclick="buy(${p.p},${p.g})">ACHETER — ${p.p.toFixed(2)} €</button></div>`).join('')}
+    <div class="card small">⚠️ Aucune conversion €→objet direct. Toujours €→💎→héros. Le cerveau perd la trace du prix réel. C'est voulu.</div>
+    <button class="btn ghost" onclick="resetGame()">🗑️ Réinitialiser l'empire</button>`;
+}
+function buy(p,g){
+  S.spent+=p; S.gems+=g;
+  const msgs=['Merci pour votre contribution.','Le premier pas est fait.','Vous revenez. Ils reviennent tous.','🐋 La baleine grandit.','VIP '+vip()+' débloqué. Le serveur vous salue.'];
+  notif('💎 +'+g+' — '+pick(msgs));
+  log(`Achat : +${g}💎 (${p.toFixed(2)}€ fictifs).`);
+  draw();
+}
+function resetGame(){ if(confirm('Tout effacer ?')){ localStorage.removeItem('empire'); location.reload(); } }
+
+// ================= INIT =================
+log('Bienvenue, '+S.player+'. '+S.nemesis.name+' vous observe déjà.');
+draw();
+</script>
+</body>
+</html>
