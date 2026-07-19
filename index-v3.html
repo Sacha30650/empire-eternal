@@ -90,9 +90,6 @@ let particles=[];
 function burst(x,y,color,n=20,spread=3){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*spread;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,life:.6+Math.random()*.5,color,size:2+Math.random()*3})}}
 function drawParticles(dt){particles=particles.filter(p=>{p.t+=dt;p.x+=p.vx;p.y+=p.vy;p.vy+=.05;const a=1-p.t/p.life;if(a<=0)return false;ctx.globalAlpha=a;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;return true})}
 
-// Fonction utilitaire pour rectangles arrondis (compatibilité tous navigateurs)
-function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
-
 // Étoiles de fond (parallax)
 const stars=Array.from({length:80},()=>({x:Math.random(),y:Math.random(),s:Math.random()*1.5+.3,tw:Math.random()*Math.PI*2}));
 

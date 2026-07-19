@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EMPIRE ETERNAL — Combat</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{background:#000;font-family:-apple-system,'Segoe UI',sans-serif;color:#eee;overflow:hidden;height:100vh;display:flex;justify-content:center}
+  #app{width:100%;max-width:430px;height:100vh;background:linear-gradient(180deg,#0d0a1a,#141026);display:flex;flex-direction:column;position:relative}
+  header{padding:8px 14px;text-align:center;border-bottom:1px solid #2a2350;flex-shrink:0}
+  header h1{font-size:14px;letter-spacing:3px;color:#e8b64c}
+  header h1 span{color:#8b5cf6}
+  #resbar{display:flex;justify-content:space-around;padding:6px;font-size:12px;background:#120e24;border-bottom:1px solid #2a2350;flex-shrink:0}
+  #resbar b{color:#e8b64c}
+  #screen{flex:1;overflow:hidden;position:relative}
+  nav{display:flex;border-top:1px solid #2a2350;background:#120e24;flex-shrink:0}
+  nav button{flex:1;background:none;border:none;color:#888;font-size:10px;padding:8px 2px;cursor:pointer}
+  nav button.on{color:#e8b64c}
+  nav button .ic{font-size:18px;display:block}
+  .overlay{position:absolute;inset:0;background:rgba(5,3,15,.95);display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay.show{display:flex}
+  .modal{width:92%;max-width:390px;background:#1a1530;border:1px solid #e8b64c;border-radius:16px;padding:18px;text-align:center;max-height:90%;overflow-y:auto}
+  .modal h2{color:#e8b64c;font-size:16px;margin-bottom:10px;letter-spacing:1px}
+  .btn{display:block;width:100%;padding:14px;margin:8px 0;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#e8b64c,#c9932f);color:#1a1206}
+  .btn.alt{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff}
+  .btn.danger{background:linear-gradient(135deg,#e05252,#b91c1c);color:#fff}
+  .btn.ghost{background:#241d42;color:#ccc}
+  .btn:disabled{opacity:.4}
+  #battleCanvas{width:100%;height:100%;display:block;touch-action:none}
+  #hud{position:absolute;top:0;left:0;right:0;padding:8px;display:flex;justify-content:space-between;pointer-events:none;z-index:10}
+  .hud-panel{background:rgba(13,10,26,.85);padding:6px 10px;border-radius:8px;font-size:11px;border:1px solid #2a2350}
+  .hud-panel b{color:#e8b64c}
+  #unitPanel{position:absolute;bottom:60px;left:8px;right:8px;background:rgba(13,10,26,.9);border:1px solid #2a2350;border-radius:10px;padding:8px;display:none;z-index:10}
+  #unitPanel.show{display:block}
+  #unitPanel .row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+  #mdOverlay{position:absolute;inset:0;background:rgba(5,3,15,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:40}
+  #mdOverlay.show{display:flex}
+  #mdTimer{width:80%;height:8px;background:#2a2350;border-radius:4px;overflow:hidden;margin:12px 0}
+  #mdTimerBar{height:100%;width:100%;background:linear-gradient(90deg,#4ade80,#e8b64c,#e05252)}
+  .md-choice{width:85%;padding:16px;margin:6px;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer}
+  #gachaCanvas{width:100%;height:100%;display:block}
+  #dynastyCanvas{width:100%;height:100%;display:block}
+  .gold{color:#e8b64c}.red{color:#e05252}.green{color:#4ade80}.purp{color:#a78bfa}
+  .small{font-size:10px;color:#8a80b0}
+</style>
+</head>
+<body>
+<div id="app">
+  <header><h1>⚔️ EMPIRE <span>ETERNAL</span></h1></header>
+  <div id="resbar">
+    <span>🪙 <b id="rGold">0</b></span>
+    <span>💎 <b id="rGems">0</b></span>
+    <span>⚡ <b id="rEnergy">0</b></span>
+    <span>📅 <b id="rDay">1</b></span>
+    <span>👑 <b id="rVip">VIP 0</b></span>
+  </div>
+  <div id="screen"></div>
+  <nav id="tabs">
+    <button data-t="empire" class="on"><span class="ic">🏰</span>Empire</button>
+    <button data-t="combat"><span class="ic">⚔️</span>Combat</button>
+    <button data-t="gacha"><span class="ic">🎰</span>Invocation</button>
+    <button data-t="dynastie"><span class="ic">👑</span>Dynastie</button>
+    <button data-t="shop"><span class="ic">💎</span>Boutique</button>
+  </nav>
+</div>
+
+<!-- MOMENT DÉCISIF -->
+<div class="overlay" id="ovMD">
+  <div class="modal">
+    <h2>⚡ MOMENT DÉCISIF</h2>
+    <div class="small">⌚ Votre rythme cardiaque est transmis à votre général…</div>
+    <div id="mdTimer"><div id="mdTimerBar"></div></div>
+    <button class="md-choice danger" style="background:linear-gradient(135deg,#e05252,#b91c1c);color:#fff" onclick="decisif('charge')">🐺 CHARGE HÉROÏQUE</button>
+    <button class="md-choice" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff" onclick="decisif('retraite')">🛡️ RETRAITE TACTIQUE</button>
+    <button class="md-choice" style="background:linear-gradient(135deg,#e8b64c,#c9932f);color:#1a1206" onclick="decisif('ultime')">🔥 ULTIME DÉCHAÎNÉ</button>
+  </div>
+</div>
+
+<!-- RAPPORT DE GUERRE -->
+<div class="overlay" id="ovReport">
+  <div class="modal">
+    <h2>📜 RAPPORT DE GUERRE</h2>
+    <div id="reportBody" style="text-align:left;font-size:12px;max-height:280px;overflow-y:auto"></div>
+    <button class="btn" onclick="closeReport()">Fermer</button>
+  </div>
+</div>
+
+<!-- RÉSULTAT DE BATAILLE -->
+<div class="overlay" id="ovResult">
+  <div class="modal">
+    <h2 id="resultTitle">VICTOIRE</h2>
+    <div id="resultBody" style="font-size:13px;max-height:260px;overflow-y:auto"></div>
+    <button class="btn" onclick="closeResult()">Continuer</button>
+    <button class="btn ghost" id="btnRetry" onclick="retryBattle()">⚔️ Revanche immédiate</button>
+  </div>
+</div>
+
+<script>
+// ================= ÉTAT =================
+const RANKS=['Soldat','Capitaine','Fléau','Bourreau','Seigneur de Guerre'];
+const NAMES=['Sylvara','Duncan','Isolde','Ragnar','Elowen','Cedric','Morgane','Theron','Lyanna','Varen'];
+let S={
+  player:'Sacha',day:1,gold:500,gems:800,energy:100,pity:0,pulls:0,spent:0,
+  heroes:[
+    {name:'Maeve',age:24,power:820,alive:true,gen:1,x:0,y:0},
+    {name:'Aldric',age:58,power:640,alive:true,gen:1,x:0,y:0},
+  ],
+  nemesis:{name:'Kaeltherion',rank:0,wins:0,taunt:'Je t\'attendais, petit empire.'},
+  journal:[],pendingHeir:null
+};
+function save(){try{localStorage.setItem('empire2',JSON.stringify(S))}catch(e){}}
+function load(){try{const d=localStorage.getItem('empire2');if(d)S=JSON.parse(d)}catch(e){}}
+load();
+
+const $=id=>document.getElementById(id);
+const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function log(m){S.journal.unshift(`J${S.day} — ${m}`);S.journal=S.journal.slice(0,40)}
+function teamPower(){return S.heroes.filter(h=>h.alive).reduce((s,h)=>s+h.power,0)}
+function nemPower(){return Math.round(teamPower()*(1.04+0.06*S.nemesis.wins))}
+function vip(){const t=[0,10,30,60,100,250,500,1000];let v=0;t.forEach((x,i)=>{if(S.spent>=x)v=i});return v}
+function render(){$('rGold').textContent=S.gold;$('rGems').textContent=S.gems;$('rEnergy').textContent=S.energy;$('rDay').textContent=S.day;$('rVip').textContent='VIP '+vip();save()}
+
+// ================= NAVIGATION =================
+let tab='empire';
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));draw()});
+function draw(){render();({empire:drawEmpire,combat:drawCombat,gacha:drawGacha,dynastie:drawDynastie,shop:drawShop})[tab]()}
+
+// ================= EMPIRE =================
+function drawEmpire(){
+  const alive=S.heroes.filter(h=>h.alive);
+  $('screen').innerHTML=`
+    <div style="padding:12px;height:100%;overflow-y:auto">
+    <div style="background:#1a1530;border:1px solid #2a2350;border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-size:13px;color:#e8b64c;margin-bottom:6px">🏰 VOTRE EMPIRE — ${S.player}</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px dashed #2a2350"><span>Puissance</span><b class="gold">${teamPower()}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px dashed #2a2350"><span>Héros vivants</span><b>${alive.length}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span>Némésis</span><b class="red">${S.nemesis.name} (${RANKS[S.nemesis.rank]})</b></div>
+    </div>
+    <button class="btn ghost" onclick="night()">🌙 Passer la nuit (le monde continue de brûler…)</button>
+    <div style="background:#1a1530;border:1px solid #2a2350;border-radius:12px;padding:12px;margin-top:10px">
+      <div style="font-size:13px;color:#e8b64c;margin-bottom:6px">📓 JOURNAL DE GUERRE</div>
+      <div style="font-size:11px;color:#9a90c0;max-height:140px;overflow-y:auto">${S.journal.map(j=>`<div style="padding:2px 0;border-bottom:1px solid #1c1636">${j}</div>`).join('')||'<div>Chronique vierge.</div>'}</div>
+    </div>
+    <div style="font-size:10px;color:#8a80b0;text-align:center;margin-top:10px">💸 Dépensé : ${S.spent.toFixed(2)} € — la machine à baleines vous observe.</div>
+    </div>`;
+}
+
+function night(){
+  S.day++;S.energy=100;S.gems+=50;
+  const R=[`<div>📅 <b>Jour ${S.day}</b> — pendant votre sommeil…</div>`];
+  S.heroes.forEach(h=>{if(!h.alive)return;h.age++;
+    if(h.age>60){h.power=Math.round(h.power*0.97);R.push(`<div>⏳ ${h.name} a ${h.age} ans. (${h.power}⚔️)</div>`)}
+    if(h.age>72&&Math.random()<0.25){h.alive=false;R.push(`<div class="red">💀 ${h.name} est mort à ${h.age} ans.</div>`);log(`${h.name} est mort à ${h.age} ans.`)}});
+  const ev=Math.random();
+  if(ev<0.35&&S.heroes.some(h=>h.alive)){
+    const loss=Math.round(S.gold*0.10);S.gold-=loss;S.nemesis.wins++;
+    if(S.nemesis.rank<4&&S.nemesis.wins%2===0)S.nemesis.rank++;
+    S.nemesis.taunt=pick([`Ta défense était touchante.`,`J'ai pris ${loss} pièces pendant que tu dormais.`,`Le temps joue pour moi.`]);
+    R.push(`<div class="red">🔴 ${S.nemesis.name} a pillé votre trésor ! −${loss} 🪙</div>`);
+    R.push(`<div class="purp">💬 « ${S.nemesis.taunt} »</div>`);
+    log(`${S.nemesis.name} a pillé votre or.`);
+  }else if(ev<0.55){const g=rnd(50,150);S.gold+=g;R.push(`<div class="green">🛡️ Raid repoussé. +${g} 🪙</div>`)}
+  else{R.push(`<div>🌙 Nuit calme.</div>`)}
+  const dead=S.heroes.find(h=>!h.alive);
+  if(dead&&!S.pendingHeir){S.pendingHeir=dead.name;R.push(`<div class="gold">👑 La lignée de <b>${dead.name}</b> peut se perpétuer → Dynastie.</div>`)}
+  R.push(`<div class="small">+50 💎 récompense quotidienne</div>`);
+  $('reportBody').innerHTML=R.map(r=>`<div style="padding:3px 0;border-bottom:1px solid #2a2350">${r}</div>`).join('');
+  $('ovReport').classList.add('show');draw();
+}
+function closeReport(){$('ovReport').classList.remove('show');draw()}
+
+// ================= COMBAT TEMPS RÉEL =================
+let battle=null,canvas,ctx,animId;
+const UNIT_TYPES={
+  infantry:{icon:'🛡️',hp:100,dmg:15,speed:0.8,range:1,color:'#4a90d9',name:'Infanterie'},
+  archer:{icon:'🏹',hp:60,dmg:12,speed:0.9,range:3,color:'#4ade80',name:'Archers'},
+  cavalry:{icon:'🐴',hp:80,dmg:20,speed:1.4,range:1,color:'#e8b64c',name:'Cavalerie'},
+  hero:{icon:'👑',hp:150,dmg:30,speed:1.0,range:1,color:'#a78bfa',name:'Héros'}
+};
+function drawCombat(){
+  const n=S.nemesis,np=nemPower(),fog=Math.round(np*0.15);
+  $('screen').innerHTML=`
+    <div style="padding:12px;height:100%;overflow-y:auto">
+    <div style="background:#1a1530;border:1px solid #2a2350;border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-size:13px;color:#e8b64c;margin-bottom:6px">⚔️ VOTRE NÉMÉSIS</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span><b class="red">${n.name}</b> <span class="tag" style="font-size:9px;padding:2px 6px;border-radius:6px;background:#2a2350">${RANKS[n.rank]}</span></span><span class="small">${n.wins} victoire(s)</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span>Puissance estimée</span><b class="red">${np-fog} — ${np+fog} ?</b></div>
+      <div style="font-size:12px;color:#c0b0ff;padding:6px 0">💬 « ${n.taunt} »</div>
+    </div>
+    <div style="background:#1a1530;border:1px solid #2a2350;border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-size:13px;color:#e8b64c;margin-bottom:6px">VOTRE ARMÉE</div>
+      ${S.heroes.filter(h=>h.alive).map(h=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px dashed #2a2350"><span>${h.name} <span class="small">(${h.age}a, G${h.gen})</span></span><b class="gold">${h.power}⚔️</b></div>`).join('')||'<div class="red">Aucun héros vivant !</div>'}
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span>Total</span><b class="gold">${teamPower()}</b></div>
+    </div>
+    <button class="btn danger" ${S.energy<10||!S.heroes.some(h=>h.alive)?'disabled':''} onclick="startBattle()">⚔️ COMBATTRE ${n.name.toUpperCase()} (10 ⚡)</button>
+    <div class="small" style="text-align:center;margin-top:6px">Bataille temps réel — touchez une unité pour la sélectionner, touchez la carte pour la déplacer.</div>
+    </div>`;
+}
+
+function startBattle(){
+  if(S.energy<10)return;S.energy-=10;render();
+  // Générer les unités
+  const myPower=teamPower(),enemyPower=nemPower();
+  const myHeroes=S.heroes.filter(h=>h.alive);
+  const units=[];
+  // Mes unités (basées sur les héros)
+  myHeroes.forEach((h,i)=>{
+    units.push({id:'h'+i,type:'hero',side:'ally',x:1+i*0.5,y:4.5,hp:150,maxHp:150,dmg:30,speed:1.0,range:1.2,target:null,cooldown:0,name:h.name,icon:'👑',color:'#a78bfa'});
+  });
+  // Troupes alliées supplémentaires
+  const allyCount=Math.min(4,Math.floor(myPower/300));
+  for(let i=0;i<allyCount;i++){
+    const t=pick(['infantry','archer','cavalry']);
+    const u=UNIT_TYPES[t];
+    units.push({id:'a'+i,type:t,side:'ally',x:0.5+Math.random(),y:2+i*1.2,hp:u.hp,maxHp:u.hp,dmg:u.dmg,speed:u.speed,range:u.range,target:null,cooldown:0,name:u.name,icon:u.icon,color:u.color});
+  }
+  // Ennemis
+  const enemyCount=Math.min(6,Math.floor(enemyPower/250)+2);
+  for(let i=0;i<enemyCount;i++){
+    const t=i===0?'hero':pick(['infantry','archer','cavalry']);
+    const u=UNIT_TYPES[t];
+    units.push({id:'e'+i,type:t,side:'enemy',x:6.5+Math.random(),y:1.5+i*1.1,hp:u.hp*1.1,maxHp:u.hp*1.1,dmg:u.dmg,speed:u.speed,range:u.range,target:null,cooldown:0,name:i===0?S.nemesis.name:u.name,icon:i===0?'💀':u.icon,color:i===0?'#e05252':u.color});
+  }
+  battle={units,selected:null,projectiles:[],effects:[],phase:'deploy',time:0,winner:null,mdTriggered:false};
+  // Afficher le canvas
+  $('screen').innerHTML=`<canvas id="battleCanvas"></canvas>
+    <div id="hud"><div class="hud-panel">⏱️ <b id="bTime">0</b>s</div><div class="hud-panel">🛡️ <b id="bAlly">0</b> vs 💀 <b id="bEnemy">0</b></div></div>
+    <div id="unitPanel"></div>`;
+  canvas=$('battleCanvas');ctx=canvas.getContext('2d');
+  resizeCanvas();window.addEventListener('resize',resizeCanvas);
+  canvas.addEventListener('touchstart',handleTouch);canvas.addEventListener('mousedown',handleTouch);
+  battle.phase='fight';
+  loop();
+}
+function resizeCanvas(){const r=$('screen').getBoundingClientRect();canvas.width=r.width;canvas.height=r.height}
+function handleTouch(e){
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+  const cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+  const gx=cx/canvas.width*8,gy=cy/canvas.height*9;
+  // Sélection d'unité alliée
+  const ally=battle.units.find(u=>u.side==='ally'&&u.hp>0&&Math.hypot(u.x-gx,u.y-gy)<0.6);
+  if(ally){battle.selected=ally;showUnitPanel(ally);return}
+  // Déplacement
+  if(battle.selected&&battle.selected.hp>0){
+    battle.selected.moveTarget={x:Math.max(0.3,Math.min(7.7,gx)),y:Math.max(0.3,Math.min(8.7,gy))};
+    battle.selected.target=null;
+  }
+}
+function showUnitPanel(u){
+  $('unitPanel').classList.add('show');
+  $('unitPanel').innerHTML=`<div class="row"><span>${u.icon} <b>${u.name}</b></span><span>${u.hp}/${u.maxHp} ❤️</span></div>
+    <div class="row"><span>Dégâts</span><b>${u.dmg}</b></div><div class="row"><span>Portée</span><b>${u.range}</b></div>
+    <div class="small">Touchez la carte pour déplacer. Touchez un ennemi pour attaquer.</div>`;
+  setTimeout(()=>$('unitPanel').classList.remove('show'),3000);
+}
+function loop(){
+  if(!battle)return;
+  battle.time+=1/60;
+  update();drawBattle();
+  if(battle.phase==='fight'&&!battle.mdTriggered&&battle.time>8){
+    battle.mdTriggered=true;openMD();
+  }
+  animId=requestAnimationFrame(loop);
+}
+function update(){
+  const allies=battle.units.filter(u=>u.side==='ally'&&u.hp>0);
+  const enemies=battle.units.filter(u=>u.side==='enemy'&&u.hp>0);
+  if(allies.length===0){endBattle('enemy');return}
+  if(enemies.length===0){endBattle('ally');return}
+  battle.units.forEach(u=>{
+    if(u.hp<=0)return;
+    u.cooldown=Math.max(0,u.cooldown-1/60);
+    // Déplacement manuel
+    if(u.moveTarget){
+      const dx=u.moveTarget.x-u.x,dy=u.moveTarget.y-u.y,d=Math.hypot(dx,dy);
+      if(d<0.1){u.moveTarget=null}else{u.x+=dx/d*u.speed/60;u.y+=dy/d*u.speed/60}
+      return;
+    }
+    // IA : trouver cible
+    if(!u.target||u.target.hp<=0){
+      const targets=u.side==='ally'?enemies:allies;
+      u.target=targets.reduce((a,b)=>Math.hypot(u.x-b.x,u.y-b.y)<Math.hypot(u.x-a.x,u.y-a.y)?b:a,targets[0]);
+    }
+    if(!u.target)return;
+    const dist=Math.hypot(u.x-u.target.x,u.y-u.target.y);
+    if(dist<=u.range){
+      if(u.cooldown<=0){
+        u.cooldown=1.2;
+        // Projectile pour archers
+        if(u.type==='archer'&&dist>1.5){
+          battle.projectiles.push({x:u.x,y:u.y,tx:u.target.x,ty:u.target.y,t:0,dmg:u.dmg,target:u.target});
+        }else{
+          u.target.hp-=u.dmg;
+          battle.effects.push({x:u.target.x,y:u.target.y,t:0,type:'hit'});
+          if(u.target.hp<=0){battle.effects.push({x:u.target.x,y:u.target.y,t:0,type:'death'});u.target=null}
+        }
+      }
+    }else{
+      u.x+=(u.target.x-u.x)/dist*u.speed/60;
+      u.y+=(u.target.y-u.y)/dist*u.speed/60;
+    }
+  });
+  // Projectiles
+  battle.projectiles=battle.projectiles.filter(p=>{
+    p.t+=2/60;
+    if(p.t>=1){p.target.hp-=p.dmg;battle.effects.push({x:p.target.x,y:p.target.y,t:0,type:'hit'});if(p.target.hp<=0)battle.effects.push({x:p.target.x,y:p.target.y,t:0,type:'death'});return false}
+    return true;
+  });
+  // Effets
+  battle.effects=battle.effects.filter(e=>{e.t+=1/60;return e.t<0.5});
+}
+function drawBattle(){
+  const W=canvas.width,H=canvas.height,sx=W/8,sy=H/9;
+  // Terrain
+  ctx.fillStyle='#1a2a1a';ctx.fillRect(0,0,W,H);
+  // Grille hexagonale stylisée
+  ctx.strokeStyle='#2a3a2a';ctx.lineWidth=1;
+  for(let x=0;x<=8;x++){ctx.beginPath();ctx.moveTo(x*sx,0);ctx.lineTo(x*sx,H);ctx.stroke()}
+  for(let y=0;y<=9;y++){ctx.beginPath();ctx.moveTo(0,y*sy);ctx.lineTo(W,y*sy);ctx.stroke()}
+  // Zones
+  ctx.fillStyle='rgba(74,144,217,0.08)';ctx.fillRect(0,0,2.5*sx,H);
+  ctx.fillStyle='rgba(224,82,82,0.08)';ctx.fillRect(5.5*sx,0,2.5*sx,H);
+  // Projectiles
+  battle.projectiles.forEach(p=>{
+    const x=p.x+(p.tx-p.x)*p.t,y=p.y+(p.ty-p.y)*p.t;
+    ctx.fillStyle='#e8b64c';ctx.beginPath();ctx.arc(x*sx,y*sy,4,0,Math.PI*2);ctx.fill();
+  });
+  // Unités
+  battle.units.forEach(u=>{
+    if(u.hp<=0)return;
+    const x=u.x*sx,y=u.y*sy;
+    // Sélection
+    if(battle.selected===u){ctx.strokeStyle='#e8b64c';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke()}
+    // Cercle de vie
+    ctx.fillStyle=u.side==='ally'?'#4ade80':'#e05252';
+    ctx.fillRect(x-15,y-22,30,4);
+    ctx.fillStyle='#000';ctx.fillRect(x-15,y-22,30*(1-u.hp/u.maxHp),4);
+    // Icône
+    ctx.font='20px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(u.icon,x,y);
+    // Nom pour héros
+    if(u.type==='hero'){ctx.font='9px sans-serif';ctx.fillStyle='#fff';ctx.fillText(u.name,x,y+18)}
+  });
+  // Effets
+  battle.effects.forEach(e=>{
+    const x=e.x*sx,y=e.y*sy;
+    if(e.type==='hit'){ctx.strokeStyle='rgba(232,182,76,'+(1-e.t*2)+')';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,10+e.t*20,0,Math.PI*2);ctx.stroke()}
+    if(e.type==='death'){ctx.font='24px serif';ctx.fillStyle='rgba(224,82,82,'+(1-e.t*2)+')';ctx.fillText('💀',x,y-e.t*30)}
+  });
+  // HUD
+  const allies=battle.units.filter(u=>u.side==='ally'&&u.hp>0).length;
+  const enemies=battle.units.filter(u=>u.side==='enemy'&&u.hp>0).length;
+  $('bTime').textContent=Math.floor(battle.time);
+  $('bAlly').textContent=allies;$('bEnemy').textContent=enemies;
+}
+function openMD(){
+  battle.phase='md';$('ovMD').classList.add('show');
+  let t=5;$('mdTimerBar').style.width='100%';
+  window.mdInterval=setInterval(()=>{t-=0.1;$('mdTimerBar').style.width=Math.max(0,t/5*100)+'%';
+    if(t<=0){clearInterval(window.mdInterval);$('ovMD').classList.remove('show');battle.phase='fight';resolveMD(pick(['charge','retraite','ultime']),true)}},100);
+}
+function decisif(choice){clearInterval(window.mdInterval);$('ovMD').classList.remove('show');battle.phase='fight';resolveMD(choice,false)}
+function resolveMD(choice,panicked){
+  const enemy=pick(['charge','retraite','ultime']);
+  const beats={charge:'retraite',retraite:'ultime',ultime:'charge'};
+  let mod=0;if(beats[choice]===enemy)mod=0.3;else if(beats[enemy]===choice)mod=-0.3;
+  battle.units.forEach(u=>{
+    if(u.side==='ally'&&u.hp>0){u.dmg=Math.round(u.dmg*(1+mod));if(!panicked&&choice==='ultime')u.hp=Math.min(u.maxHp,u.hp+30)}
+  });
+  battle.effects.push({x:4,y:4.5,t:0,type:'hit'});
+}
+function endBattle(winner){
+  battle.phase='end';cancelAnimationFrame(animId);
+  const margin=Math.round(Math.random()*20+5);
+  const win=winner==='ally';
+  if(win){
+    const g=250+50*S.nemesis.wins,gg=40;S.gold+=g;S.gems+=gg;
+    if(S.nemesis.rank>0)S.nemesis.rank--;S.nemesis.wins=Math.max(0,S.nemesis.wins-1);
+    S.nemesis.taunt=pick(['Intéressant. À demain.','Tu as eu de la chance.','Profite de cette victoire.']);
+    log(`Victoire de ${margin}% sur ${S.nemesis.name} !`);
+    $('resultTitle').textContent='🏆 VENGEANCE ACCOMPLIE';$('resultTitle').style.color='#4ade80';
+    $('resultBody').innerHTML=`<div class="green" style="font-size:16px;padding:8px">+${g} 🪙, +${gg} 💎</div>
+      <div class="purp">💬 ${S.nemesis.name} : « ${S.nemesis.taunt} »</div>
+      <div class="small">Marge de victoire : ${margin}%</div>`;
+    $('btnRetry').style.display='none';
+  }else{
+    const loss=Math.round(S.gold*0.15);S.gold-=loss;S.nemesis.wins++;if(S.nemesis.rank<4)S.nemesis.rank++;
+    S.nemesis.taunt=pick([`Toujours aussi lent, ${S.player} ?`,`${margin}% — c'est la distance entre toi et la victoire.`,`Ta défaite d'hier était belle. Celle-ci est meilleure.`]);
+    // Mort au combat
+    let deathHtml='';
+    const alive=S.heroes.filter(h=>h.alive);
+    if(alive.length&&Math.random()<0.15){const d=pick(alive);d.alive=false;S.pendingHeir=d.name;
+      deathHtml=`<div class="red" style="padding:6px">💀 <b>${d.name}</b> est tombé au combat à ${d.age} ans.</div>`;
+      log(`${d.name} est tombé au combat.`);}
+    log(`Défaite face à ${S.nemesis.name} (${margin}%).`);
+    $('resultTitle').textContent='💀 DÉFAITE';$('resultTitle').style.color='#e05252';
+    $('resultBody').innerHTML=`<div class="red" style="font-size:16px;padding:8px">−${loss} 🪙 — ${S.nemesis.name} devient <b>${RANKS[S.nemesis.rank]}</b></div>
+      ${deathHtml}<div class="purp">💬 « ${S.nemesis.taunt} »</div>
+      <button class="btn" onclick="buyVengeance()">😈 PACK VENGEANCE −60% — 19,99€</button>`;
+    $('btnRetry').style.display='block';
+  }
+  $('ovResult').classList.add('show');render();
+}
+function closeResult(){$('ovResult').classList.remove('show');battle=null;draw()}
+function retryBattle(){$('ovResult').classList.remove('show');battle=null;drawCombat()}
+function buyVengeance(){
+  S.spent+=19.99;S.gems+=2000;
+  const h=S.heroes.find(x=>x.alive);if(h)h.power=Math.round(h.power*1.15);
+  log('Pack Vengeance acheté.');closeResult();
+}
+
+// ================= GACHA ANIMÉ =================
+let gachaAnim=null;
+function drawGacha(){
+  $('screen').innerHTML=`<canvas id="gachaCanvas"></canvas>
+    <div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;padding:0 20px">
+      <div id="pullResult" style="min-height:50px;font-size:14px;margin-bottom:10px"></div>
+      <button class="btn alt" ${S.gems<160?'disabled':''} onclick="pull()">🔮 INVOQUER (160 💎)</button>
+      <div class="small">Taux SSR : 2,5% | Pity : ${S.pity}/90 | Tirages : ${S.pulls}</div>
+    </div>`;
+  const c=$('gachaCanvas');c.width=$('screen').clientWidth;c.height=$('screen').clientHeight;
+  const x=c.getContext('2d');gachaAnim={c,x,particles:[],portal:0,result:null};
+  gachaLoop();
+}
+function gachaLoop(){
+  if(!gachaAnim)return;
+  const{c,x}=gachaAnim;
+  x.fillStyle='#0d0a1a';x.fillRect(0,0,c.width,c.height);
+  const cx=c.width/2,cy=c.height/2-40;
+  // Portail
+  gachaAnim.portal+=0.02;
+  for(let i=0;i<3;i++){
+    x.strokeStyle=`rgba(139,92,246,${0.3-i*0.1})`;x.lineWidth=2;
+    x.beginPath();x.arc(cx,cy,60+i*20+Math.sin(gachaAnim.portal*2+i)*5,gachaAnim.portal+i,gachaAnim.portal+i+Math.PI*1.5);x.stroke();
+  }
+  x.fillStyle='rgba(139,92,246,0.1)';x.beginPath();x.arc(cx,cy,50,0,Math.PI*2);x.fill();
+  // Particules
+  gachaAnim.particles=gachaAnim.particles.filter(p=>{
+    p.t+=1/60;p.x+=p.vx/60;p.y+=p.vy/60;
+    x.fillStyle=`rgba(232,182,76,${1-p.t})`;x.beginPath();x.arc(p.x,p.y,3,0,Math.PI*2);x.fill();
+    return p.t<1;
+  });
+  // Résultat
+  if(gachaAnim.result){
+    x.font='48px serif';x.textAlign='center';x.textBaseline='middle';
+    x.fillText(gachaAnim.result.icon,cx,cy);
+    x.font='16px sans-serif';x.fillStyle='#e8b64c';x.fillText(gachaAnim.result.name,cx,cy+50);
+    x.font='12px sans-serif';x.fillStyle='#fff';x.fillText(gachaAnim.result.power+'⚔️',cx,cy+75);
+  }
+  requestAnimationFrame(gachaLoop);
+}
+function pull(){
+  if(S.gems<160)return;S.gems-=160;S.pulls++;S.pity++;render();
+  gachaAnim.result=null;$('pullResult').textContent='';
+  // Explosion de particules
+  for(let i=0;i<40;i++){
+    const a=Math.random()*Math.PI*2,s=2+Math.random()*4;
+    gachaAnim.particles.push({x:gachaAnim.c.width/2,y:gachaAnim.c.height/2-40,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0});
+  }
+  setTimeout(()=>{
+    const r=Math.random()*100;let res;
+    if(S.pity>=90||r<2.5){
+      S.pity=0;const featured=Math.random()<0.12;
+      const h={name:featured?'🔥 KAELTHEA LA MÉTA':pick(NAMES),age:rnd(16,25),power:featured?rnd(1400,1600):rnd(1100,1300),alive:true,gen:1};
+      S.heroes.push(h);res={icon:'👑',name:h.name,power:h.power};
+      log(`SSR : ${h.name} !`);
+    }else if(r<14.5){
+      const h={name:pick(NAMES),age:rnd(16,30),power:rnd(650,900),alive:true,gen:1};
+      S.heroes.push(h);res={icon:'⭐',name:h.name,power:h.power};
+    }else{
+      const g=rnd(30,80);S.gold+=g;res={icon:'🌑',name:'Éclat d\'âme',power:'+'+g+' 🪙'};
+    }
+    gachaAnim.result=res;
+    $('pullResult').innerHTML=`<span class="${res.icon==='👑'?'gold':res.icon==='⭐'?'purp':''}">${res.icon==='👑'?'🌟 SSR !':res.icon==='⭐'?'4★':'3★'} — ${res.name}</span>`;
+    render();
+  },1200);
+}
+
+// ================= DYNASTIE VISUELLE =================
+function drawDynastie(){
+  $('screen').innerHTML=`<canvas id="dynastyCanvas"></canvas>
+    <div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;padding:0 20px">
+      ${S.pendingHeir?`<div style="background:#1a1530;border:1px solid #e8b64c;border-radius:12px;padding:10px;margin-bottom:8px">
+        <div class="gold" style="font-size:13px;margin-bottom:6px">🕯️ LA LIGNÉE DE ${S.pendingHeir.toUpperCase()}</div>
+        <button class="btn" style="padding:10px;font-size:13px" onclick="heir(false)">👶 Héritier (70%)</button>
+        <button class="btn alt" style="padding:10px;font-size:13px" ${S.gems<300?'disabled':''} onclick="heir(true)">🧪 Sérum 300💎 (100%)</button>
+      </div>`:'<div class="small">Vos héros vieillissent d\'un an par nuit. À 60 ans, le déclin. Puis la mort permanente.</div>'}
+    </div>`;
+  const c=$('dynastyCanvas');c.width=$('screen').clientWidth;c.height=$('screen').clientHeight;
+  const x=c.getContext('2d');
+  x.fillStyle='#0d0a1a';x.fillRect(0,0,c.width,c.height);
+  // Arbre généalogique
+  const gens={};S.heroes.forEach(h=>{if(!gens[h.gen])gens[h.gen]=[];gens[h.gen].push(h)});
+  const genKeys=Object.keys(gens).sort();
+  genKeys.forEach((g,gi)=>{
+    const heroes=gens[g],y=60+gi*100;
+    x.strokeStyle='#2a2350';x.lineWidth=1;
+    x.beginPath();x.moveTo(20,y);x.lineTo(c.width-20,y);x.stroke();
+    x.fillStyle='#8a80b0';x.font='10px sans-serif';x.textAlign='left';x.fillText('Génération '+g,20,y-8);
+    heroes.forEach((h,hi)=>{
+      const hx=40+hi*((c.width-80)/Math.max(1,heroes.length-1));
+      // Ligne parentale (simplifiée)
+      if(h.gen>1){x.strokeStyle='#4a3a6a';x.beginPath();x.moveTo(hx,y);x.lineTo(c.width/2,y-100);x.stroke()}
+      // Cercle héros
+      x.fillStyle=h.alive?(h.power>1000?'#e8b64c':h.power>700?'#a78bfa':'#4a90d9'):'#333';
+      x.beginPath();x.arc(hx,y,20,0,Math.PI*2);x.fill();
+      x.fillStyle=h.alive?'#fff':'#666';x.font='16px serif';x.textAlign='center';x.textBaseline='middle';
+      x.fillText(h.alive?'👑':'💀',hx,y);
+      x.font='9px sans-serif';x.fillText(h.name,hx,y+30);
+      x.fillText(h.age+'a',hx,y+40);
+      x.fillText(h.power+'⚔️',hx,y+50);
+    });
+  });
+}
+function heir(serum){
+  const idx=S.heroes.findIndex(h=>!h.alive&&h.name===S.pendingHeir);if(idx<0)return;
+  const dead=S.heroes[idx];
+  if(serum){if(S.gems<300)return;S.gems-=300}
+  const base=Math.max(dead.power,500);
+  const h={name:pick(NAMES)+' '+dead.name.slice(0,3)+'sson',age:16,gen:dead.gen+1,power:Math.round(base*(serum?1:0.7)),alive:true};
+  S.heroes.splice(idx,1);S.heroes.push(h);S.pendingHeir=null;
+  log(`Héritier : ${h.name} reprend le flambeau.`);draw();
+}
+
+// ================= BOUTIQUE =================
+function drawShop(){
+  const packs=[
+    {n:'Pack du Débutant −90%',p:0.99,g:100,d:'Brise la barrière du premier paiement.'},
+    {n:'Carte Mensuelle',p:4.99,g:550,d:'Crée l\'habitude de connexion.'},
+    {n:'Pack Vengeance',p:19.99,g:2000,d:'Ciblé sur votre dernière défaite.'},
+    {n:'Pack Seigneur de Guerre',p:99.99,g:13000,d:'Pour les baleines.'},
+  ];
+  $('screen').innerHTML=`<div style="padding:12px;height:100%;overflow-y:auto">
+    <div style="background:#1a1530;border:1px solid #2a2350;border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-size:13px;color:#e8b64c;margin-bottom:6px">💎 BOUTIQUE (fictif)</div>
+      <div class="small">Total « dépensé » : <b class="gold">${S.spent.toFixed(2)} €</b> — ${vip()>=5?'🐋 BALEINE':vip()>=2?'Dauphin':'Menu fretin'}</div>
+    </div>
+    ${packs.map((p,i)=>`<div style="background:#1a1530;border:1px solid #2a2350;border-radius:12px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding-bottom:6px"><span><b>${p.n}</b><br><span class="small">${p.d}</span></span><b class="gold">${p.g}💎</b></div>
+      <button class="btn ${i>=2?'danger':'ghost'}" style="padding:10px;font-size:13px" onclick="buy(${p.p},${p.g})">ACHETER — ${p.p.toFixed(2)}€</button>
+    </div>`).join('')}
+    <button class="btn ghost" onclick="if(confirm('Tout effacer ?')){localStorage.removeItem('empire2');location.reload()}">🗑️ Réinitialiser</button>
+  </div>`;
+}
+function buy(p,g){S.spent+=p;S.gems+=g;log(`Achat : +${g}💎 (${p.toFixed(2)}€)`);draw()}
+
+// ================= INIT =================
+log('Bienvenue, '+S.player+'. '+S.nemesis.name+' vous observe déjà.');
+draw();
+</script>
+</body>
+</html>
