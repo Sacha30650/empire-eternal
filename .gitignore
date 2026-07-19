@@ -1,0 +1,10 @@
+# Generated QA captures
+/v4-*.png
+/v3-final.png
+
+# Python
+__pycache__/
+*.pyc
+
+# Local browser profiles
+.ee-browser/

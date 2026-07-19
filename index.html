@@ -1,509 +1,102 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>EMPIRE ETERNAL</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
-  html,body{height:100%;overflow:hidden;background:#000;font-family:-apple-system,'Segoe UI',sans-serif;touch-action:none}
-  #game{position:fixed;inset:0;display:block}
-  #ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column}
-  .topbar{pointer-events:auto;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:linear-gradient(180deg,rgba(10,8,25,.92),rgba(10,8,25,.4));backdrop-filter:blur(4px)}
-  .title{font-size:15px;letter-spacing:4px;color:#e8b64c;font-weight:800;text-shadow:0 0 12px rgba(232,182,76,.6)}
-  .res{display:flex;gap:10px;font-size:12px;color:#ddd}
-  .res b{color:#e8b64c}
-  #nav{pointer-events:auto;display:flex;background:rgba(10,8,25,.95);border-top:1px solid #3a2f60}
-  #nav button{flex:1;background:none;border:none;color:#776fa0;font-size:10px;padding:9px 2px;cursor:pointer}
-  #nav button.on{color:#e8b64c}
-  #nav button .ic{font-size:20px;display:block;filter:drop-shadow(0 0 4px rgba(232,182,76,.5))}
-  #panel{pointer-events:auto;position:fixed;left:10px;right:10px;bottom:64px;max-height:46%;overflow-y:auto;background:rgba(18,14,38,.94);border:1px solid #3a2f60;border-radius:14px;padding:12px;backdrop-filter:blur(6px);display:none}
-  #panel.show{display:block;animation:slideUp .25s ease}
-  @keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
-  .btn{display:block;width:100%;padding:14px;margin:8px 0;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#e8b64c,#c9932f);color:#1a1206;box-shadow:0 4px 14px rgba(232,182,76,.3);transition:transform .1s}
-  .btn:active{transform:scale(.97)}
-  .btn.alt{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 4px 14px rgba(139,92,246,.3)}
-  .btn.danger{background:linear-gradient(135deg,#e05252,#b91c1c);color:#fff;box-shadow:0 4px 14px rgba(224,82,82,.3)}
-  .btn.ghost{background:#241d42;color:#ccc;box-shadow:none}
-  .row{display:flex;justify-content:space-between;padding:7px 0;font-size:14px;border-bottom:1px dashed #2a2350;color:#ddd}
-  .row:last-child{border-bottom:none}
-  .gold{color:#e8b64c}.red{color:#e05252}.green{color:#4ade80}.purp{color:#a78bfa}
-  .small{font-size:10px;color:#8a80b0}
-  #toast{position:fixed;top:56px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#3b0764,#6d28d9);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:700;display:none;z-index:99;box-shadow:0 4px 20px rgba(139,92,246,.5);border:1px solid #e8b64c}
-  #toast.show{display:block;animation:toastIn .3s ease}
-  @keyframes toastIn{from{transform:translateX(-50%) translateY(-20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
-  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:98;transition:opacity .15s}
-  .hpbar{height:5px;background:#222;border-radius:3px;overflow:hidden;margin:3px 0}
-  .hpbar i{display:block;height:100%;transition:width .3s}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#090716">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Empire Eternal">
+  <meta name="description" content="Bâtis ta citadelle, commande tes héros et fracture le temps pour sauver ton royaume.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Empire Eternal — La Fracture</title>
 </head>
 <body>
-<canvas id="game"></canvas>
-<div id="flash"></div>
-<div id="ui">
-  <div class="topbar">
-    <div class="title">⚔ EMPIRE ETERNAL</div>
-    <div class="res"><span>🪙<b id="rGold">0</b></span><span>💎<b id="rGems">0</b></span><span>⚡<b id="rEnergy">0</b></span><span>👑<b id="rVip">0</b></span></div>
+  <canvas id="game" aria-label="Empire Eternal"></canvas>
+
+  <div id="appUI">
+    <header id="topbar">
+      <button id="profileBtn" class="iconButton" aria-label="Profil"><span id="levelBadge">1</span></button>
+      <div class="brand"><small>EMPIRE</small><strong>ETERNAL</strong></div>
+      <div class="resources">
+        <span title="Or">🪙 <b id="gold">0</b></span>
+        <span title="Éther">✦ <b id="aether">0</b></span>
+        <span title="Énergie">⚡ <b id="energy">0</b></span>
+      </div>
+      <button id="questsBtn" class="iconButton questButton" aria-label="Quêtes">📜<i id="questDot"></i></button>
+    </header>
+
+    <div id="sceneTitle" aria-live="polite">
+      <small id="sceneEyebrow">CITADELLE D'ASTRA</small>
+      <strong id="sceneName">Votre royaume</strong>
+    </div>
+
+    <div id="battleHUD" class="hidden">
+      <div class="battleSide ally"><span>VOTRE ESCOUADE</span><b id="allyCount">3</b></div>
+      <div class="battleTimer"><span id="waveLabel">VAGUE 1/2</span><b id="battleTime">0:00</b></div>
+      <div class="battleSide enemy"><span>ENNEMIS</span><b id="enemyCount">0</b></div>
+    </div>
+
+    <div id="combatActions" class="hidden" aria-label="Compétences de combat">
+      <button class="skill" data-skill="bulwark"><span class="skillIcon">🛡️</span><b>BASTION</b><small>bouclier</small><i class="cooldown"></i></button>
+      <button class="skill" data-skill="volley"><span class="skillIcon">🏹</span><b>VOLÉE</b><small>zone</small><i class="cooldown"></i></button>
+      <button class="skill" data-skill="nova"><span class="skillIcon">🔮</span><b>NOVA</b><small>ralentit</small><i class="cooldown"></i></button>
+      <div id="comboMeter"><span>COMBO</span><b>x1</b></div>
+    </div>
+
+    <nav id="bottomNav" aria-label="Navigation principale">
+      <button data-scene="base" class="active"><span>🏰</span><b>Citadelle</b></button>
+      <button data-scene="map"><span>🗺️</span><b>Campagne</b><i id="mapDot"></i></button>
+      <button data-scene="heroes"><span>🛡️</span><b>Héros</b></button>
+      <button data-scene="portal"><span>✦</span><b>Portail</b></button>
+    </nav>
   </div>
-  <div style="flex:1"></div>
-  <div id="nav">
-    <button data-t="empire" class="on"><span class="ic">🏰</span>Empire</button>
-    <button data-t="combat"><span class="ic">⚔️</span>Combat</button>
-    <button data-t="gacha"><span class="ic">🎰</span>Invoke</button>
-    <button data-t="dynasty"><span class="ic">👑</span>Dynastie</button>
-    <button data-t="shop"><span class="ic">💎</span>Shop</button>
+
+  <div id="sheetBackdrop" class="hidden"></div>
+  <section id="sheet" class="hidden" role="dialog" aria-modal="true">
+    <div class="grabber"></div>
+    <button id="sheetClose" aria-label="Fermer">×</button>
+    <div id="sheetContent"></div>
+  </section>
+
+  <div id="timingEvent" class="hidden">
+    <div class="timingVignette"></div>
+    <div class="timingCopy">
+      <small>LA FRACTURE S'OUVRE</small>
+      <h2>FRAPPE TEMPORELLE</h2>
+      <p>Touche quand les deux anneaux se rencontrent.</p>
+    </div>
+    <div id="timingTarget"><i id="timingRing"></i><b>TOUCHER</b></div>
+    <div id="timingGrade"></div>
   </div>
-</div>
-<div id="panel"></div>
-<div id="toast"></div>
 
-<script>
-// ==================== ÉTAT ====================
-const RANKS=['Soldat','Capitaine','Fléau','Bourreau','Seigneur de Guerre'];
-const NAMES=['Sylvara','Duncan','Isolde','Ragnar','Elowen','Cedric','Morgane','Theron'];
-let S={gold:750,gems:13890,energy:90,day:2,pity:12,pulls:34,spent:99.99,
-  heroes:[{name:'Maeve',age:24,power:820,alive:true,gen:1},{name:'Aldric',age:58,power:640,alive:true,gen:1}],
-  nemesis:{name:'Kaeltherion',rank:0,wins:1,taunt:'Ta défaite d\'hier était belle.'},
-  journal:['J2 — Victoire de 11% sur Kaeltherion !','J2 — Kaeltherion a pillé votre or.','J1 — Bienvenue, Sacha.']};
-function save(){try{localStorage.setItem('empirefx',JSON.stringify(S))}catch(e){}}
-function load(){try{const d=localStorage.getItem('empirefx');if(d)S=JSON.parse(d)}catch(e){}}
-load();
-const $=id=>document.getElementById(id);
-const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
-const pick=a=>a[Math.floor(Math.random()*a.length)];
-const teamPower=()=>S.heroes.filter(h=>h.alive).reduce((s,h)=>s+h.power,0);
-const nemPower=()=>Math.round(teamPower()*(1.04+0.06*S.nemesis.wins));
-const vip=()=>{const t=[0,10,30,60,100,250,500,1000];let v=0;t.forEach((x,i)=>{if(S.spent>=x)v=i});return v};
-function log(m){S.journal.unshift(`J${S.day} — ${m}`);S.journal=S.journal.slice(0,40)}
-function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
-function flashScreen(){$('flash').style.opacity=.7;setTimeout(()=>$('flash').style.opacity=0,150)}
-function render(){$('rGold').textContent=S.gold;$('rGems').textContent=S.gems;$('rEnergy').textContent=S.energy;$('rVip').textContent='VIP '+vip();save()}
+  <div id="resultScreen" class="hidden">
+    <div class="resultCard">
+      <small id="resultKicker">MISSION ACCOMPLIE</small>
+      <h1 id="resultTitle">VICTOIRE</h1>
+      <div id="resultStars">☆☆☆</div>
+      <p id="resultSummary"></p>
+      <div id="resultLoot"></div>
+      <button id="resultContinue" class="primaryButton">CONTINUER</button>
+    </div>
+  </div>
 
-// ==================== CANVAS / RENDERER ====================
-const cv=$('game'),ctx=cv.getContext('2d');
-let W,H,DPR;
-function resize(){DPR=Math.min(2,window.devicePixelRatio||1);W=window.innerWidth;H=window.innerHeight;cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}
-window.addEventListener('resize',resize);resize();
+  <div id="offlineReward" class="hidden">
+    <div class="offlineCard">
+      <span>🌙</span><small>VOTRE ROYAUME A TRAVAILLÉ</small>
+      <h2>Vous voilà de retour</h2>
+      <p id="offlineText"></p>
+      <button id="offlineClaim" class="primaryButton">RÉCUPÉRER</button>
+    </div>
+  </div>
 
-// Particules globales
-let particles=[];
-function burst(x,y,color,n=20,spread=3){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*spread;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,life:.6+Math.random()*.5,color,size:2+Math.random()*3})}}
-function drawParticles(dt){particles=particles.filter(p=>{p.t+=dt;p.x+=p.vx;p.y+=p.vy;p.vy+=.05;const a=1-p.t/p.life;if(a<=0)return false;ctx.globalAlpha=a;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;return true})}
+  <div id="toast" role="status"></div>
+  <div id="flash"></div>
+  <button id="installBtn" class="hidden">＋ Installer l’app</button>
 
-// Fonction utilitaire pour rectangles arrondis (compatibilité tous navigateurs)
-function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
-
-// Étoiles de fond (parallax)
-const stars=Array.from({length:80},()=>({x:Math.random(),y:Math.random(),s:Math.random()*1.5+.3,tw:Math.random()*Math.PI*2}));
-
-// ==================== SCÈNES ====================
-let scene='empire',sceneT=0;
-let units=[],projectiles=[],mdActive=false,mdTimer=0,mdCb=null;
-let portalRot=0,pullAnim=null;
-
-// ---- EMPIRE : château animé ----
-function drawEmpire(t,dt){
-  // Ciel dégradé
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#0d0a1f');g.addColorStop(.6,'#1a1435');g.addColorStop(1,'#2a1a45');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  // Étoiles scintillantes
-  stars.forEach(s=>{const a=.3+.7*Math.abs(Math.sin(t*.001+s.tw));ctx.globalAlpha=a*.8;ctx.fillStyle='#fff';ctx.fillRect(s.x*W,s.y*H*.5,s.s,s.s)});
-  ctx.globalAlpha=1;
-  // Lune
-  ctx.fillStyle='#f0e6c8';ctx.beginPath();ctx.arc(W*.82,H*.14,28,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='rgba(240,230,200,.15)';ctx.beginPath();ctx.arc(W*.82,H*.14,44,0,Math.PI*2);ctx.fill();
-  // Collines
-  ctx.fillStyle='#141030';ctx.beginPath();ctx.moveTo(0,H*.62);
-  for(let x=0;x<=W;x+=20)ctx.lineTo(x,H*.62+Math.sin(x*.01+2)*30);
-  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.fill();
-  ctx.fillStyle='#0e0a24';ctx.beginPath();ctx.moveTo(0,H*.72);
-  for(let x=0;x<=W;x+=20)ctx.lineTo(x,H*.72+Math.sin(x*.013)*25);
-  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.fill();
-  // CHÂTEAU (dessiné procéduralement)
-  const cx=W/2,cy=H*.68;
-  ctx.save();ctx.translate(cx,cy);
-  // Ombre
-  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(0,95,120,18,0,0,Math.PI*2);ctx.fill();
-  // Corps principal
-  ctx.fillStyle='#4a4460';ctx.fillRect(-70,-40,140,130);
-  ctx.fillStyle='#5a5470';ctx.fillRect(-70,-40,140,14);
-  // Tours
-  [[-95,-70], [65,-70]].forEach(([tx,ty])=>{
-    ctx.fillStyle='#4a4460';ctx.fillRect(tx,ty,60,160);
-    ctx.fillStyle='#e05252';ctx.beginPath();ctx.moveTo(tx-5,ty);ctx.lineTo(tx+30,ty-45);ctx.lineTo(tx+65,ty);ctx.fill();
-    // Fenêtre tour
-    ctx.fillStyle=Math.sin(t*.003+tx)>0?'#ffd76a':'#2a2350';ctx.fillRect(tx+22,ty+40,16,24);
-  });
-  // Donjon
-  ctx.fillStyle='#5a5470';ctx.fillRect(-40,-100,80,70);
-  ctx.fillStyle='#e8b64c';ctx.beginPath();ctx.moveTo(-45,-100);ctx.lineTo(0,-145);ctx.lineTo(45,-100);ctx.fill();
-  // Porte
-  ctx.fillStyle='#241d42';ctx.beginPath();ctx.arc(0,90,24,Math.PI,0);ctx.fill();ctx.fillRect(-24,66,48,24);
-  // Fenêtres animées (lumière qui vacille)
-  for(let i=0;i<4;i++){const fl=Math.sin(t*.004+i*1.7)>.2;ctx.fillStyle=fl?'#ffd76a':'#2a2350';ctx.fillRect(-50+i*28,0,14,20)}
-  // Drapeau qui flotte
-  const wv=Math.sin(t*.005)*6;
-  ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-145);ctx.lineTo(0,-178);ctx.stroke();
-  ctx.fillStyle='#e05252';ctx.beginPath();ctx.moveTo(0,-178);ctx.quadraticCurveTo(18,-172+wv*.5,32,-174+wv);ctx.lineTo(32,-160+wv);ctx.quadraticCurveTo(16,-158+wv*.5,0,-162);ctx.fill();
-  ctx.restore();
-  // Feux de camp (particules continues)
-  if(Math.random()<.25)burst(W*.2+Math.random()*20,H*.8, pick(['#ff9a3c','#ffd76a','#e05252']),1,1.2);
-  if(Math.random()<.25)burst(W*.8-Math.random()*20,H*.82, pick(['#ff9a3c','#ffd76a','#e05252']),1,1.2);
-  // Torches du château
-  if(Math.random()<.4)burst(cx-95+28,cy-72,'#ff9a3c',1,.8);
-  if(Math.random()<.4)burst(cx+65+28,cy-72,'#ff9a3c',1,.8);
-  // Banderole info
-  ctx.fillStyle='rgba(18,14,38,.85)';roundRect(ctx,14,H*.4,W-28,64,12);ctx.fill();
-  ctx.strokeStyle='#3a2f60';roundRect(ctx,14,H*.4,W-28,64,12);ctx.stroke();
-  ctx.fillStyle='#e8b64c';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
-  ctx.fillText('🏰 Empire de '+S.player||'Sacha',W/2,H*.4+25);
-  ctx.fillStyle='#c0b8e0';ctx.font='12px sans-serif';
-  ctx.fillText(`⚔️ ${teamPower()} puissance  •  👑 ${S.heroes.filter(h=>h.alive).length} héros  •  💀 ${S.nemesis.name}`,W/2,H*.4+46);
-  drawParticles(dt);
-}
-
-// ---- COMBAT : bataille temps réel ----
-function startCombat(){
-  units=[];projectiles=[];
-  const myHeroes=S.heroes.filter(h=>h.alive);
-  myHeroes.forEach((h,i)=>units.push(mkUnit('hero',true,60+i*40,H*.55,h.name)));
-  const allyN=Math.min(4,Math.floor(teamPower()/300));
-  for(let i=0;i<allyN;i++)units.push(mkUnit(pick(['inf','arc','cav']),true,40+Math.random()*40,H*.35+i*70));
-  const enN=Math.min(6,Math.floor(nemPower()/250)+2);
-  units.push(mkUnit('nem',false,W-80,H*.5,S.nemesis.name));
-  for(let i=1;i<enN;i++)units.push(mkUnit(pick(['inf','arc','cav']),false,W-60-Math.random()*40,H*.3+i*60));
-  scene='combat';sceneT=0;mdActive=false;
-  toast('⚔️ La bataille commence !');
-}
-function mkUnit(type,ally,x,y,name){
-  const stats={inf:{hp:100,dmg:15,sp:.5,rg:30,c:'#4a90d9',ic:'🛡️'},arc:{hp:60,dmg:12,sp:.55,rg:110,c:'#4ade80',ic:'🏹'},cav:{hp:80,dmg:20,sp:.9,rg:30,c:'#e8b64c',ic:'🐴'},hero:{hp:150,dmg:30,sp:.6,rg:35,c:'#a78bfa',ic:'👑'},nem:{hp:220,dmg:35,sp:.6,rg:35,c:'#e05252',ic:'💀'}}[type];
-  return{type,ally,x,y,hp:stats.hp,maxHp:stats.hp,dmg:stats.dmg,sp:stats.sp,rg:stats.rg,c:stats.c,ic:stats.ic,name:name||type,cd:0,target:null,hit:0,walk:Math.random()*10,sel:false};
-}
-function drawCombat(t,dt){
-  // Fond champ de bataille
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#1a2a1a');g.addColorStop(1,'#0f1a0f');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  // Herbe (texture de points)
-  ctx.fillStyle='rgba(74,222,128,.06)';
-  for(let i=0;i<200;i++){const x=(i*97)%W,y=((i*57)%(H-140))+100;ctx.fillRect(x,y,2,4)}
-  // Ligne de front
-  ctx.strokeStyle='rgba(232,182,76,.15)';ctx.setLineDash([8,8]);ctx.beginPath();ctx.moveTo(W/2,80);ctx.lineTo(W/2,H-70);ctx.stroke();ctx.setLineDash([]);
-  // Zones
-  ctx.fillStyle='rgba(74,144,217,.05)';ctx.fillRect(0,80,W/2,H-150);
-  ctx.fillStyle='rgba(224,82,82,.05)';ctx.fillRect(W/2,80,W/2,H-150);
-  if(!mdActive)sceneT+=dt;
-  // Update unités
-  const alive=units.filter(u=>u.hp>0);
-  const allies=alive.filter(u=>u.ally),enemies=alive.filter(u=>!u.ally);
-  alive.forEach(u=>{
-    u.cd=Math.max(0,u.cd-dt);
-    u.walk+=dt*8;
-    if(u.hit>0)u.hit-=dt;
-    if(!mdActive){
-      if(!u.target||u.target.hp<=0){const foes=u.ally?enemies:allies;let best=1e9;foes.forEach(f=>{const d=Math.hypot(u.x-f.x,u.y-f.y);if(d<best){best=d;u.target=f}})}
-      if(u.target){
-        const d=Math.hypot(u.x-u.target.x,u.y-u.target.y);
-        if(d<=u.rg&&u.cd<=0){
-          u.cd=1.2;
-          if(u.type==='arc'&&d>50){projectiles.push({x:u.x,y:u.y-14,tx:u.target,ty:u.target.y-14,t:0,dmg:u.dmg})}
-          else{u.target.hp-=u.dmg;u.target.hit=.15;burst(u.target.x,u.target.y-14,'#ffd76a',6,2);if(u.target.hp<=0)burst(u.target.x,u.target.y-14,'#e05252',18,3)}
-        }else if(d>u.rg){u.x+=(u.target.x-u.x)/d*u.sp;u.y+=(u.target.y-u.y)/d*u.sp}
-      }
-    }
-  });
-  // Projectiles
-  projectiles=projectiles.filter(p=>{
-    if(!p.tx||p.tx.hp<=0)return false;
-    p.t+=dt*3;
-    const x=p.x+(p.tx.x-p.x)*p.t,y=p.y+(p.ty-p.y)*p.t;
-    ctx.strokeStyle='#e8b64c';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-6,y-2);ctx.stroke();
-    if(p.t>=1){p.tx.hp-=p.dmg;p.tx.hit=.15;burst(p.tx.x,p.tx.y,'#ffd76a',5,2);if(p.tx.hp<=0)burst(p.tx.x,p.tx.y,'#e05252',18,3);return false}
-    return true;
-  });
-  // Dessin unités
-  alive.sort((a,b)=>a.y-b.y).forEach(u=>{
-    ctx.save();ctx.translate(u.x,u.y);
-    // Ombre
-    ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(0,10,14,5,0,0,Math.PI*2);ctx.fill();
-    // Sélection
-    if(u.sel){ctx.strokeStyle='#e8b64c';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,-6,20,0,Math.PI*2);ctx.stroke()}
-    // Corps (chevalier stylisé)
-    const bounce=u.target&&Math.hypot(u.x-u.target.x,u.y-u.target.y)>u.rg?Math.sin(u.walk)*2:0;
-    const flash=u.hit>0;
-    // Corps
-    ctx.fillStyle=flash?'#fff':u.c;
-    ctx.beginPath();ctx.arc(0,-6+bounce,11,0,Math.PI*2);ctx.fill();
-    // Armure/plastron
-    ctx.fillStyle=flash?'#fff':shade(u.c,-30);
-    ctx.fillRect(-7,-8+bounce,14,10);
-    // Tête
-    ctx.fillStyle=flash?'#fff':shade(u.c,25);
-    ctx.beginPath();ctx.arc(0,-16+bounce,6,0,Math.PI*2);ctx.fill();
-    // Heaume
-    ctx.fillStyle=flash?'#fff':shade(u.c,-15);
-    ctx.beginPath();ctx.arc(0,-17+bounce,6,Math.PI,0);ctx.fill();
-    // Arme
-    ctx.strokeStyle=flash?'#fff':'#c0c8d8';ctx.lineWidth=2;
-    if(u.type==='arc'){ctx.beginPath();ctx.arc(8,-8+bounce,7,-Math.PI/2,Math.PI/2);ctx.stroke()}
-    else{ctx.beginPath();ctx.moveTo(8,-4+bounce);ctx.lineTo(16,-16+bounce);ctx.stroke()}
-    // Icône type
-    ctx.font='10px serif';ctx.textAlign='center';ctx.fillText(u.ic,0,-26+bounce);
-    // Nom héros
-    if(u.type==='hero'||u.type==='nem'){ctx.font='bold 8px sans-serif';ctx.fillStyle='#fff';ctx.fillText(u.name,0,20)}
-    // Barre de vie
-    ctx.fillStyle='#222';ctx.fillRect(-12,-34,24,3);
-    ctx.fillStyle=u.ally?'#4ade80':'#e05252';ctx.fillRect(-12,-34,24*(u.hp/u.maxHp),3);
-    ctx.restore();
-  });
-  drawParticles(dt);
-  // HUD combat
-  ctx.fillStyle='rgba(18,14,38,.85)';roundRect(ctx,10,60,W-20,34,10);ctx.fill();
-  ctx.fillStyle='#4ade80';ctx.font='bold 13px sans-serif';ctx.textAlign='left';ctx.fillText('🛡️ '+allies.length,22,82);
-  ctx.fillStyle='#e05252';ctx.textAlign='right';ctx.fillText('💀 '+enemies.length,W-22,82);
-  ctx.fillStyle='#e8b64c';ctx.textAlign='center';ctx.fillText('⏱ '+Math.floor(sceneT)+'s',W/2,82);
-  // Déclencher Moment Décisif à 6s
-  if(sceneT>6&&!mdActive&&allies.length&&enemies.length)openMD();
-  // Fin
-  if(allies.length===0||enemies.length===0)endCombat(allies.length>0);
-  // Overlay Moment Décisif
-  if(mdActive){
-    ctx.fillStyle='rgba(5,3,15,.88)';ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#e8b64c';ctx.font='bold 22px sans-serif';ctx.textAlign='center';
-    ctx.fillText('⚡ MOMENT DÉCISIF',W/2,H*.3);
-    ctx.fillStyle='#8a80b0';ctx.font='12px sans-serif';
-    ctx.fillText('⌚ Votre sang-froid est transmis à votre général…',W/2,H*.34);
-    // Timer
-    const tw=W*.7,tr=Math.max(0,mdTimer/5);
-    ctx.fillStyle='#2a2350';roundRect(ctx,W/2-tw/2,H*.38,tw,10,5);ctx.fill();
-    const tg=ctx.createLinearGradient(W/2-tw/2,0,W/2+tw/2,0);tg.addColorStop(0,'#4ade80');tg.addColorStop(.6,'#e8b64c');tg.addColorStop(1,'#e05252');
-    ctx.fillStyle=tg;roundRect(ctx,W/2-tw/2,H*.38,tw*tr,10,5);ctx.fill();
-    // Boutons
-    const opts=[['🐺 CHARGE HÉROÏQUE','#e05252',0],['🛡️ RETRAITE TACTIQUE','#8b5cf6',1],['🔥 ULTIME DÉCHAÎNÉ','#e8b64c',2]];
-    opts.forEach(([txt,c,i])=>{
-      const by=H*.46+i*64;
-      ctx.fillStyle=c;roundRect(ctx,W/2-140,by,280,52,12);ctx.fill();
-      ctx.fillStyle=c==='#e8b64c'?'#1a1206':'#fff';ctx.font='bold 15px sans-serif';ctx.fillText(txt,W/2,by+32);
-    });
-    mdTimer-=dt;if(mdTimer<=0)resolveMD(rnd(0,2),true);
-  }
-}
-function shade(c,amt){const n=parseInt(c.slice(1),16);let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0')}
-function openMD(){mdActive=true;mdTimer=5}
-function handleMDTap(y){if(!mdActive)return false;const i=Math.floor((y-H*.46)/64);if(i>=0&&i<3){resolveMD(i,false);return true}return false}
-function resolveMD(choice,panicked){
-  mdActive=false;
-  const enemy=rnd(0,2),beats={0:1,1:2,2:0};
-  let mod=0;if(beats[choice]===enemy)mod=.3;else if(beats[enemy]===choice)mod=-.3;
-  flashScreen();burst(W/2,H/2,'#e8b64c',40,5);
-  units.forEach(u=>{if(u.ally&&u.hp>0){u.dmg=Math.round(u.dmg*(1+mod));if(!panicked&&choice===2)u.hp=Math.min(u.maxHp,u.hp+30)}});
-  toast(['🐺 Charge !','🛡️ Retraite !','🔥 ULTIME !'][choice]+(mod>0?' — AVANTAGE !':mod<0?' — contré…':''));
-}
-let combatEnded=false;
-function endCombat(win){
-  if(combatEnded)return;combatEnded=true;
-  setTimeout(()=>{
-    if(win){const g=250+50*S.nemesis.wins;S.gold+=g;S.gems+=40;S.nemesis.wins=Math.max(0,S.nemesis.wins-1);
-      log('Victoire sur '+S.nemesis.name+' !');toast('🏆 VENGEANCE ! +'+g+'🪙 +40💎');burst(W/2,H/2,'#4ade80',60,6)}
-    else{const loss=Math.round(S.gold*.15);S.gold-=loss;S.nemesis.wins++;if(S.nemesis.rank<4)S.nemesis.rank++;
-      log('Défaite face à '+S.nemesis.name+'.');toast('💀 DÉFAITE — '+S.nemesis.name+' devient '+RANKS[S.nemesis.rank]);burst(W/2,H/2,'#e05252',60,6)}
-    render();combatEnded=false;scene='empire';
-  },800);
-}
-
-// ---- GACHA : portail animé ----
-function drawGacha(t,dt){
-  const g=ctx.createRadialGradient(W/2,H*.42,20,W/2,H*.42,H*.6);
-  g.addColorStop(0,'#2a1a55');g.addColorStop(1,'#0d0a1f');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  stars.forEach(s=>{const a=.3+.7*Math.abs(Math.sin(t*.001+s.tw));ctx.globalAlpha=a*.5;ctx.fillStyle='#fff';ctx.fillRect(s.x*W,s.y*H*.6,s.s,s.s)});
-  ctx.globalAlpha=1;
-  const cx=W/2,cy=H*.42;
-  portalRot+=dt*(pullAnim?4:1);
-  // Anneaux du portail
-  for(let i=0;i<4;i++){
-    const r=50+i*24+Math.sin(t*.002+i)*6;
-    ctx.strokeStyle=`rgba(139,92,246,${.5-i*.1})`;ctx.lineWidth=3;
-    ctx.beginPath();ctx.arc(cx,cy,r,portalRot+i,portalRot+i+Math.PI*1.6);ctx.stroke();
-  }
-  // Cœur du portail
-  const pg=ctx.createRadialGradient(cx,cy,5,cx,cy,50);
-  pg.addColorStop(0,'rgba(232,182,76,.8)');pg.addColorStop(.5,'rgba(139,92,246,.4)');pg.addColorStop(1,'rgba(139,92,246,0)');
-  ctx.fillStyle=pg;ctx.beginPath();ctx.arc(cx,cy,50,0,Math.PI*2);ctx.fill();
-  // Particules orbitales
-  for(let i=0;i<12;i++){const a=portalRot*.7+i*Math.PI/6,r=70+Math.sin(t*.003+i)*10;
-    ctx.fillStyle='rgba(232,182,76,.7)';ctx.beginPath();ctx.arc(cx+Math.cos(a)*r,cy+Math.sin(a)*r,3,0,Math.PI*2);ctx.fill()}
-  // Résultat du tirage
-  if(pullAnim){
-    pullAnim.t+=dt;
-    if(pullAnim.t>1.2&&!pullAnim.revealed){
-      pullAnim.revealed=true;
-      const r=Math.random()*100;S.pity++;S.pulls++;
-      if(S.pity>=90||r<2.5){S.pity=0;const featured=Math.random()<.12;
-        const h={name:featured?'KAELTHEA LA MÉTA':pick(NAMES),age:rnd(16,25),power:featured?rnd(1400,1600):rnd(1100,1300),alive:true,gen:1};
-        S.heroes.push(h);pullAnim.res={icon:'🌟',txt:(featured?'MÉTA ':'SSR ')+h.name,power:h.power,c:'#e8b64c'};
-        log('SSR : '+h.name+' !');flashScreen();burst(cx,cy,'#e8b64c',60,6)}
-      else if(r<14.5){const h={name:pick(NAMES),age:rnd(16,30),power:rnd(650,900),alive:true,gen:1};
-        S.heroes.push(h);pullAnim.res={icon:'⭐',txt:'4★ '+h.name,power:h.power,c:'#a78bfa'};burst(cx,cy,'#a78bfa',30,4)}
-      else{const g=rnd(30,80);S.gold+=g;pullAnim.res={icon:'🌑',txt:'3★ Éclat +'+g+'🪙',power:0,c:'#8a80b0'};burst(cx,cy,'#8a80b0',15,3)}
-      render();
-    }
-    if(pullAnim.revealed){
-      const s=Math.min(1,(pullAnim.t-1.2)*3);
-      ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
-      ctx.font='50px serif';ctx.textAlign='center';ctx.fillText(pullAnim.res.icon,0,10);
-      ctx.font='bold 16px sans-serif';ctx.fillStyle=pullAnim.res.c;ctx.fillText(pullAnim.res.txt,0,44);
-      if(pullAnim.res.power){ctx.font='13px sans-serif';ctx.fillStyle='#fff';ctx.fillText(pullAnim.res.power+'⚔️',0,66)}
-      ctx.restore();
-    }
-  }
-  drawParticles(dt);
-  // Infos
-  ctx.fillStyle='rgba(18,14,38,.85)';roundRect(ctx,14,H*.62,W-28,54,12);ctx.fill();
-  ctx.fillStyle='#e8b64c';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
-  ctx.fillText('Taux SSR 2,5%  •  Pity '+S.pity+'/90',W/2,H*.62+22);
-  ctx.fillStyle=S.pity>=75?'#e05252':'#8a80b0';ctx.font='11px sans-serif';
-  ctx.fillText(S.pity>=75?'⚠️ Le garanti approche…':'Tirages totaux : '+S.pulls,W/2,H*.62+40);
-}
-
-// ---- DYNASTIE : arbre ----
-function drawDynasty(t,dt){
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#1a0f2a');g.addColorStop(1,'#0d0a1f');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='#e8b64c';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
-  ctx.fillText('👑 LA DYNASTIE',W/2,100);
-  // Arbre par générations
-  const gens={};S.heroes.forEach(h=>{(gens[h.gen]=gens[h.gen]||[]).push(h)});
-  const gks=Object.keys(gens).sort();
-  gks.forEach((g,gi)=>{
-    const hs=gens[g],y=160+gi*130;
-    ctx.strokeStyle='#3a2f60';ctx.beginPath();ctx.moveTo(30,y);ctx.lineTo(W-30,y);ctx.stroke();
-    ctx.fillStyle='#8a80b0';ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('Génération '+g,30,y-10);
-    hs.forEach((h,hi)=>{
-      const hx=W/2+(hi-(hs.length-1)/2)*100;
-      const pulse=h.alive?1+Math.sin(t*.003+hi)*0.05:1;
-      // Ligne parentale
-      if(h.gen>1){ctx.strokeStyle='#4a3a6a';ctx.beginPath();ctx.moveTo(hx,y);ctx.lineTo(W/2,y-130);ctx.stroke()}
-      // Cercle héros
-      ctx.save();ctx.translate(hx,y);ctx.scale(pulse,pulse);
-      ctx.fillStyle=h.alive?(h.power>1000?'#e8b64c':h.power>700?'#a78bfa':'#4a90d9'):'#333';
-      ctx.beginPath();ctx.arc(0,0,24,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle=h.alive?'#e8b64c':'#555';ctx.lineWidth=2;ctx.stroke();
-      ctx.font='20px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(h.alive?'👑':'💀',0,2);
-      ctx.restore();
-      ctx.fillStyle=h.alive?'#fff':'#666';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
-      ctx.fillText(h.name,hx,y+36);
-      ctx.font='9px sans-serif';ctx.fillStyle='#8a80b0';
-      ctx.fillText(h.age+'a • '+h.power+'⚔️',hx,y+49);
-    });
-  });
-  ctx.textBaseline='alphabetic';
-}
-
-// ---- SHOP (fond animé sobre) ----
-function drawShopBG(t,dt){
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#1a1025');g.addColorStop(1,'#0d0a1f');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  // Gemmes flottantes
-  for(let i=0;i<8;i++){const x=(i*67+Math.sin(t*.0008+i)*30)%W,y=(i*113+t*.02)%(H-150)+80;
-    ctx.save();ctx.translate(x,y);ctx.rotate(t*.001+i);ctx.globalAlpha=.25;
-    ctx.fillStyle='#8b5cf6';ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(9,0);ctx.lineTo(0,12);ctx.lineTo(-9,0);ctx.fill();ctx.restore()}
-  ctx.globalAlpha=1;
-  drawParticles(dt);
-}
-
-// ==================== BOUCLE ====================
-let lastT=0;
-function loop(t){
-  const dt=Math.min(.05,(t-lastT)/1000);lastT=t;
-  ctx.clearRect(0,0,W,H);
-  if(scene==='empire')drawEmpire(t,dt);
-  else if(scene==='combat')drawCombat(t,dt);
-  else if(scene==='gacha')drawGacha(t,dt);
-  else if(scene==='dynasty')drawDynasty(t,dt);
-  else if(scene==='shop')drawShopBG(t,dt);
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
-
-// ==================== INPUT ====================
-cv.addEventListener('pointerdown',e=>{
-  if(scene==='combat'&&mdActive){handleMDTap(e.clientY);return}
-  if(scene==='combat'){
-    const u=units.find(u=>u.ally&&u.hp>0&&Math.hypot(u.x-e.clientX,u.y-e.clientY)<25);
-    if(u){units.forEach(x=>x.sel=false);u.sel=true;burst(u.x,u.y-10,'#e8b64c',8,2);return}
-    const sel=units.find(u=>u.sel&&u.hp>0);
-    if(sel){sel.target=null;sel.x+=(e.clientX-sel.x)*.3;sel.y+=(e.clientY-sel.y)*.3;sel.sel=false}
-  }
-  if(scene==='gacha'&&pullAnim&&pullAnim.revealed){pullAnim=null}
-});
-
-// ==================== PANNEAUX UI ====================
-function showPanel(html){$('panel').innerHTML=html;$('panel').classList.add('show')}
-function hidePanel(){$('panel').classList.remove('show')}
-document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x===b));
-  const t=b.dataset.t;render();
-  if(t==='empire'){scene='empire';hidePanel()}
-  if(t==='combat'){scene='empire';showCombatPanel()}
-  if(t==='gacha'){scene='gacha';showGachaPanel()}
-  if(t==='dynasty'){scene='dynasty';showDynastyPanel()}
-  if(t==='shop'){scene='shop';showShopPanel()}
-});
-function showCombatPanel(){
-  const n=S.nemesis,np=nemPower(),fog=Math.round(np*.15);
-  showPanel(`<div class="row"><span><b class="red">${n.name}</b></span><span class="small">${RANKS[n.rank]} • ${n.wins} victoire(s)</span></div>
-  <div class="row"><span>Puissance estimée</span><b class="red">${np-fog} — ${np+fog} ?</b></div>
-  <div class="purp" style="font-size:13px;padding:8px 0">💬 « ${n.taunt} »</div>
-  <div class="row"><span>Votre armée</span><b class="gold">${teamPower()}⚔️</b></div>
-  <button class="btn danger" ${S.energy<10?'disabled':''} onclick="goCombat()">⚔️ COMBATTRE (10 ⚡)</button>
-  <div class="small" style="text-align:center">Touchez une unité pour la booster, regardez le massacre.</div>`);
-}
-window.goCombat=()=>{S.energy-=10;render();hidePanel();startCombat()};
-function showGachaPanel(){
-  showPanel(`<div class="row"><span>💎 Gemmes</span><b class="gold">${S.gems}</b></div>
-  <button class="btn alt" ${S.gems<160?'disabled':''} onclick="doPull()">🔮 INVOQUER (160 💎)</button>
-  <div class="small" style="text-align:center">Le portail décide de votre destin.</div>`);
-}
-window.doPull=()=>{if(S.gems<160)return;S.gems-=160;render();hidePanel();pullAnim={t:0,revealed:false,res:null};burst(W/2,H*.42,'#8b5cf6',40,5)};
-function showDynastyPanel(){
-  const dead=S.heroes.find(h=>!h.alive);
-  showPanel(`<div class="row"><span>Générations</span><b>${Math.max(...S.heroes.map(h=>h.gen))}</b></div>
-  ${dead?`<div class="gold" style="padding:6px 0">🕯️ La lignée de ${dead.name} peut se perpétuer.</div>
-  <button class="btn" onclick="claimHeir(false)">👶 Héritier (70%)</button>
-  <button class="btn alt" ${S.gems<300?'disabled':''} onclick="claimHeir(true)">🧪 Sérum 300💎 (100%)</button>`
-  :`<div class="small" style="text-align:center;padding:8px">Vos héros vieillissent d'un an par nuit.<br>À 60 ans, le déclin. Puis la mort permanente.</div>`}
-  <button class="btn ghost" onclick="passNight()">🌙 Passer la nuit</button>`);
-}
-window.claimHeir=(serum)=>{
-  const idx=S.heroes.findIndex(h=>!h.alive);if(idx<0)return;
-  const dead=S.heroes[idx];if(serum){if(S.gems<300)return;S.gems-=300}
-  const base=Math.max(dead.power,500);
-  S.heroes.splice(idx,1);
-  S.heroes.push({name:pick(NAMES)+' '+dead.name.slice(0,3)+'sson',age:16,gen:dead.gen+1,power:Math.round(base*(serum?1:.7)),alive:true});
-  log('Héritier de '+dead.name+' !');toast('👑 La lignée continue !');render();showDynastyPanel();
-};
-window.passNight=()=>{
-  S.day++;S.energy=100;S.gems+=50;
-  S.heroes.forEach(h=>{if(!h.alive)return;h.age++;if(h.age>72&&Math.random()<.25){h.alive=false;log(h.name+' est mort à '+h.age+' ans.')}});
-  if(Math.random()<.35&&S.heroes.some(h=>h.alive)){const loss=Math.round(S.gold*.1);S.gold-=loss;S.nemesis.wins++;log(S.nemesis.name+' a pillé votre or (−'+loss+'🪙).');toast('🔴 Pillé pendant la nuit ! −'+loss+'🪙')}
-  else toast('🌙 Jour '+S.day+' — +50💎');
-  render();showDynastyPanel();
-};
-function showShopPanel(){
-  const packs=[['Pack Débutant −90%',0.99,100],['Carte Mensuelle',4.99,550],['Pack Vengeance',19.99,2000],['Pack Baleine 🐋',99.99,13000]];
-  showPanel(`<div class="row"><span>Dépensé</span><b class="gold">${S.spent.toFixed(2)} €</b></div>
-  <div class="row"><span>Statut</span><b class="${vip()>=5?'red':'gold'}">${vip()>=5?'🐋 BALEINE':vip()>=2?'Dauphin':'Menu fretin'}</b></div>
-  ${packs.map((p,i)=>`<button class="btn ${i>=2?'danger':'ghost'}" onclick="buy(${p[1]},${p[2]})">${p[0]} — ${p[1].toFixed(2)}€ (+${p[2]}💎)</button>`).join('')}`);
-}
-window.buy=(e,g)=>{S.spent+=e;S.gems+=g;log('Achat : +'+g+'💎 ('+e.toFixed(2)+'€).');toast('💎 +'+g+' — la machine vous remercie.');burst(W/2,H/2,'#e8b64c',30,4);render();showShopPanel()};
-
-// Init
-if(!S.player)S.player='Sacha';
-render();
-</script>
+  <script src="game.js" defer></script>
 </body>
 </html>
