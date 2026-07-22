@@ -39,4 +39,4 @@ Puis ouvrir `http://127.0.0.1:8080/`.
 - `python3 cdp_test.py` avec Chromium ouvert sur le port CDP indiqué par `EE_CDP_PORT`.
 - Le test automatisé couvre : navigation, coût d’énergie, compétences, Frappe temporelle, victoire, étoiles, déblocage de campagne, portail, amélioration de bâtiment, sauvegarde et Service Worker.
 
-Tous les graphismes du jeu et les icônes PWA sont dessinés procéduralement. Aucun asset tiers n’est nécessaire.
+Les unités de combat principales utilisent des sprites dark fantasy 2.5D originaux dans `assets/units/`, le Bois des murmures dispose d’un décor peint optimisé dans `assets/environments/` et les compétences utilisent des icônes dédiées dans `assets/ui/skills/`. Un rendu procédural de secours reste actif pour les héros, boss et biomes qui ne disposent pas encore d’un asset.

@@ -1,12 +1,14 @@
 import asyncio
 import base64
 import json
+import os
 import urllib.request
 import websockets
 
-PORT = 9226
+PORT = int(os.environ.get('EE_CDP_PORT', '9226'))
 
 async def main():
+    mission = int(os.environ.get('EE_CAPTURE_MISSION', '1'))
     targets = json.load(urllib.request.urlopen(f'http://127.0.0.1:{PORT}/json'))
     page = next(t for t in targets if t.get('type') == 'page')
     counter = 0
@@ -32,7 +34,7 @@ async def main():
             with open(path,'wb') as handle:
                 handle.write(base64.b64decode(result['result']['data']))
         await send('Page.enable'); await send('Runtime.enable')
-        await evaluate("document.getElementById('resultScreen').classList.add('hidden');__EE_TEST__.switchScene('map');__EE_TEST__.startMission(1)")
+        await evaluate(f"document.getElementById('resultScreen').classList.add('hidden');__EE_TEST__.switchScene('map');__EE_TEST__.startMission({mission})")
         await asyncio.sleep(1.8)
         await shot('/root/empire-eternal/v4-battle-realtime.png')
         await asyncio.sleep(1.8)
