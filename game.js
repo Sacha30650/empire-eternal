@@ -2,11 +2,11 @@
   'use strict';
 
   // =========================================================
-  // EMPIRE ETERNAL v4 — état, progression et migration
+  // EMPIRE ETERNAL v5 — royaume vivant, progression et migration
   // =========================================================
   const SAVE_KEY = 'empire-eternal-v4';
   const OLD_KEY = 'empirefx';
-  const VERSION = 4;
+  const VERSION = 5;
   const $ = (id) => document.getElementById(id);
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
@@ -53,11 +53,12 @@
 
   function defaultState() {
     return {
-      version:VERSION, player:'Sacha', level:1, xp:0, gold:1500, aether:260, energy:100,
+      version:VERSION, player:'Sacha', level:1, xp:0, gold:1500, food:900, aether:260, energy:100,
       campaign:1, nodeStars:{}, totalStars:0, battles:0, wins:0, skills:0, upgrades:0,
       heroes:[newHero('maeve'), newHero('lyra'), newHero('orion')],
       active:['maeve','lyra','orion'],
-      buildings:{castle:1, mine:1, forge:1, guild:1},
+      buildings:{castle:1, mine:1, farm:1, forge:1, guild:1, market:1},
+      kingdom:{population:12,morale:72,prosperity:0,workers:{mine:4,farm:4,forge:2},decree:'balance',orders:{},lastMoraleTick:Date.now()},
       production:0, productionTick:Date.now(), lastSeen:Date.now(),
       portalPity:0, portalPulls:0, freePullDate:'',
       questsDate:todayKey(), questClaims:{},
@@ -103,6 +104,10 @@
     const state = {...base, ...input};
     state.version = VERSION;
     state.buildings = {...base.buildings, ...(input.buildings || {})};
+    state.kingdom = {...base.kingdom, ...(input.kingdom || {})};
+    state.kingdom.workers = {...base.kingdom.workers, ...((input.kingdom && input.kingdom.workers) || {})};
+    state.kingdom.orders = {...((input.kingdom && input.kingdom.orders) || {})};
+    state.food = Number.isFinite(Number(state.food)) ? Number(state.food) : base.food;
     state.nodeStars = input.nodeStars || {};
     state.questClaims = input.questClaims || {};
     state.heroes = Array.isArray(input.heroes) && input.heroes.length ? input.heroes.map((h) => {
@@ -124,8 +129,10 @@
   const elapsedOffline = clamp(Date.now() - (Number(S.lastSeen) || Date.now()), 0, 8 * 60 * 60 * 1000);
   if (elapsedOffline > 3 * 60 * 1000) {
     const hours = elapsedOffline / 3600000;
+    const rates = kingdomRates();
     pendingOffline = {
-      gold:Math.floor(hours * (90 + S.buildings.mine * 45)),
+      gold:Math.floor(hours * rates.gold),
+      food:Math.floor(hours * rates.foodNet),
       energy:Math.min(40, Math.floor(hours * 5)),
       minutes:Math.floor(elapsedOffline / 60000)
     };
@@ -240,7 +247,28 @@
   function addFloater(x, y, text, color = '#fff', size = 12) { floaters.push({x,y,text,color,size,life:.85,max:.85}); }
 
   function playerXpNeeded() { return 220 + (S.level - 1) * 140; }
-  function teamPower() { return S.heroes.filter((h) => S.active.includes(h.key)).reduce((sum,h)=>sum+h.power,0) + (S.buildings.forge - 1) * 90; }
+  function prosperityTier() { return S.kingdom.prosperity >= 250 ? 3 : S.kingdom.prosperity >= 120 ? 2 : S.kingdom.prosperity >= 50 ? 1 : 0; }
+  function decreeData(key=S.kingdom.decree) {
+    return {
+      balance:{name:'Pacte d’équilibre',icon:'⚖️',desc:'Une croissance stable, sans contrepartie.',gold:1,food:1,power:1},
+      harvest:{name:'Greniers ouverts',icon:'🌾',desc:'+35% de provisions, mais −10% d’or.',gold:.9,food:1.35,power:1},
+      trade:{name:'Routes franches',icon:'⚜️',desc:'+30% d’or, mais −15% de provisions.',gold:1.3,food:.85,power:1},
+      war:{name:'Effort de guerre',icon:'⚔️',desc:'+15% de puissance, mais la population consomme davantage.',gold:1,food:.88,power:1.15}
+    }[key] || {name:'Pacte d’équilibre',icon:'⚖️',desc:'',gold:1,food:1,power:1};
+  }
+  function populationCap() { return 10 + S.buildings.castle * 5 + S.buildings.guild * 2; }
+  function assignedWorkers() { return Object.values(S.kingdom.workers).reduce((a,b)=>a+(Number(b)||0),0); }
+  function kingdomRates() {
+    const w=S.kingdom.workers,d=decreeData(),morale=.65+S.kingdom.morale/200,tier=1+prosperityTier()*.05;
+    const gold=Math.round((35+S.buildings.mine*45)*(w.mine/4)*d.gold*morale*tier + (S.buildings.market-1)*28);
+    const foodGross=Math.round((55+S.buildings.farm*50)*(w.farm/4)*d.food*morale*tier);
+    const foodUse=Math.round(S.kingdom.population*(S.kingdom.decree==='war'?5.2:4));
+    return {gold,foodGross,foodUse,foodNet:foodGross-foodUse};
+  }
+  function teamPower() {
+    const base=S.heroes.filter((h) => S.active.includes(h.key)).reduce((sum,h)=>sum+h.power,0)+(S.buildings.forge-1)*90+S.kingdom.workers.forge*15;
+    return Math.round(base*decreeData().power*(1+prosperityTier()*.03));
+  }
   function addPlayerXp(amount) {
     S.xp += amount;
     while (S.xp >= playerXpNeeded()) {
@@ -250,9 +278,14 @@
   }
   function refreshHUD() {
     $('gold').textContent = formatNumber(S.gold);
+    $('food').textContent = formatNumber(S.food);
     $('aether').textContent = formatNumber(S.aether);
     $('energy').textContent = Math.floor(S.energy);
     $('levelBadge').textContent = S.level;
+    $('prosperityLabel').textContent = `PROSPÉRITÉ ${S.kingdom.prosperity}`;
+    const rates=kingdomRates(),free= S.kingdom.population-assignedWorkers();
+    $('kingdomPulse').textContent = `${S.kingdom.population}/${populationCap()} sujets • ${rates.foodNet>=0?'+':''}${rates.foodNet} 🌾/h`;
+    $('kingdomBtn').classList.toggle('alert',rates.foodNet<0||free>0);
     const claimable = QUEST_TEMPLATES.some((q) => questProgress(q) >= q.target && !S.questClaims[q.id]);
     $('questDot').classList.toggle('hidden', !claimable);
     $('mapDot').classList.toggle('hidden', S.campaign > CAMPAIGN.length);
@@ -312,6 +345,7 @@
     if (battle && !battle.ended && scene === 'battle') return;
     closeSheet(); scene = next; sceneTime = 0; hotspots = []; selectedNode = null;
     $('battleHUD').classList.add('hidden'); $('combatActions').classList.add('hidden'); $('bottomNav').classList.remove('hidden'); $('sceneTitle').classList.remove('hidden');
+    $('kingdomBtn').classList.toggle('hidden',next!=='base');
     if (deferredInstall) $('installBtn').classList.remove('hidden');
     document.querySelectorAll('#bottomNav button').forEach((b)=>b.classList.toggle('active',b.dataset.scene===next));
     const labels = {
@@ -321,39 +355,71 @@
     $('sceneEyebrow').textContent = labels[0]; $('sceneName').textContent = labels[1]; sound('tap');
   }
   document.querySelectorAll('#bottomNav button').forEach((button)=>button.addEventListener('click',()=>switchScene(button.dataset.scene)));
+  $('kingdomBtn').addEventListener('click',()=>{sound('tap');showKingdom('overview');});
 
   // =========================================================
   // Citadelle : production et bâtiments
   // =========================================================
   const BUILDING_DATA = {
-    castle:{name:'Château d’Astra',icon:'🏰',desc:'Le cœur du royaume. Chaque niveau renforce toute l’escouade.'},
-    mine:{name:'Mine stellaire',icon:'⛏️',desc:'Produit de l’or pendant votre présence et votre absence.'},
-    forge:{name:'Forge runique',icon:'⚒️',desc:'Ajoute de la puissance à tous les héros actifs.'},
-    guild:{name:'Hall des héros',icon:'🛡️',desc:'Améliore les récompenses d’expérience de mission.'}
+    castle:{name:'Château d’Astra',icon:'🏰',desc:'Le cœur du royaume. Augmente la capacité de population et les PV de l’escouade.'},
+    mine:{name:'Mine stellaire',icon:'⛏️',desc:'Produit de l’or selon le nombre d’ouvriers affectés.'},
+    farm:{name:'Fermes lunaires',icon:'🌾',desc:'Nourrissent vos sujets. Une pénurie fait chuter le moral.'},
+    forge:{name:'Forge runique',icon:'⚒️',desc:'Renforce les héros et transforme chaque forgeron en puissance militaire.'},
+    guild:{name:'Hall des héros',icon:'🛡️',desc:'Augmente la capacité de population et les récompenses d’expérience.'},
+    market:{name:'Marché d’Astra',icon:'⚜️',desc:'Ajoute un revenu fixe et ouvre les routes commerciales du Conseil.'}
   };
-  function buildingCost(key) { const level = S.buildings[key]; const base = {castle:900,mine:420,forge:650,guild:550}[key]; return Math.floor(base * Math.pow(1.72, level - 1)); }
+  function buildingCost(key) { const level=S.buildings[key],base={castle:900,mine:420,farm:380,forge:650,guild:550,market:520}[key];return Math.floor(base*Math.pow(1.72,level-1)); }
+  function buildingFoodCost(key) { return key==='castle'?Math.floor(260*Math.pow(1.48,S.buildings[key]-1)):Math.floor(({mine:90,farm:70,forge:150,guild:120,market:110}[key]||80)*Math.pow(1.42,S.buildings[key]-1)); }
+  function buildingLocked(key) { return key!=='castle'&&S.buildings[key]>=S.buildings.castle+1; }
   function buildingBonus(key) {
     const l=S.buildings[key];
-    if(key==='castle')return `+${(l-1)*4}% PV d’escouade`;
-    if(key==='mine')return `${90+l*45} or/heure`;
+    if(key==='castle')return `${populationCap()} habitants • +${(l-1)*4}% PV`;
+    if(key==='mine')return `${35+l*45} or/h de base`;
+    if(key==='farm')return `${55+l*50} provisions/h de base`;
     if(key==='forge')return `+${(l-1)*90} puissance`;
-    return `+${(l-1)*8}% XP de mission`;
+    if(key==='guild')return `+${(l-1)*8}% XP • +${l*2} places`;
+    return `+${(l-1)*28} or/h permanent`;
   }
   function showBuilding(key) {
-    const data=BUILDING_DATA[key], level=S.buildings[key], cost=buildingCost(key);
+    const data=BUILDING_DATA[key],level=S.buildings[key],cost=buildingCost(key),foodCost=buildingFoodCost(key),locked=buildingLocked(key);
     showSheet(`<div class="sheetEyebrow">BÂTIMENT DE LA CITADELLE</div><h2 class="sheetTitle">${data.icon} ${data.name}</h2><p class="sheetLead">${data.desc}</p>
       <div class="statGrid"><div class="stat"><small>NIVEAU</small><b>${level}</b></div><div class="stat"><small>BONUS</small><b>${buildingBonus(key)}</b></div><div class="stat"><small>PROCHAIN</small><b>Niv. ${level+1}</b></div></div>
       ${key==='mine'?`<div class="row"><span>Stock produit</span><b>${Math.floor(S.production)} 🪙</b></div><button class="secondaryButton" ${S.production<1?'disabled':''} onclick="EE.collectProduction()">RÉCOLTER LA PRODUCTION</button>`:''}
-      <button class="primaryButton" ${S.gold<cost?'disabled':''} onclick="EE.upgradeBuilding('${key}')">AMÉLIORER — ${cost} 🪙</button>`);
+      ${locked?`<p class="sheetLead">🔒 Améliorez le Château au niveau ${S.buildings.castle+1} pour poursuivre.</p>`:''}
+      <button class="primaryButton" ${locked||S.gold<cost||S.food<foodCost?'disabled':''} onclick="EE.upgradeBuilding('${key}')">AMÉLIORER — ${cost} 🪙 + ${foodCost} 🌾</button>
+      <button class="secondaryButton" onclick="EE.showKingdom('buildings')">VOIR TOUT LE DOMAINE</button>`);
   }
   function upgradeBuilding(key) {
-    const cost=buildingCost(key); if(S.gold<cost)return;
-    S.gold-=cost;S.buildings[key]++;S.upgrades++;addPlayerXp(35+S.buildings[key]*8);refreshHUD();
+    const cost=buildingCost(key),foodCost=buildingFoodCost(key);if(S.gold<cost||S.food<foodCost||buildingLocked(key))return;
+    S.gold-=cost;S.food-=foodCost;S.buildings[key]++;S.upgrades++;S.kingdom.prosperity+=5+S.buildings[key]*2;addPlayerXp(35+S.buildings[key]*8);refreshHUD();
     sound('victory');haptic([15,30,15]);flash('#f2c45e',.28);addParticles(W/2,H*.55,'#f2c45e',38,210);showBuilding(key);toast(`${BUILDING_DATA[key].name} niveau ${S.buildings[key]} !`);
   }
   function collectProduction() {
     const amount=Math.floor(S.production);if(amount<1)return;S.production-=amount;S.gold+=amount;refreshHUD();sound('coin');haptic(15);showBuilding('mine');toast(`+${amount} or récolté`);
   }
+
+  const KINGDOM_ORDERS = [
+    {id:'granary',icon:'🍞',name:'Réserves pour l’hiver',text:'Le peuple demande la constitution d’un grenier commun.',gold:180,food:360,reward:'18 prospérité • 12 éther',prosperity:18,aether:12,morale:4},
+    {id:'caravan',icon:'🐎',name:'Caravane des Marches',text:'Financez une route sûre vers les villages voisins.',gold:620,food:140,reward:'30 prospérité • 260 or',prosperity:30,goldReward:260,morale:3},
+    {id:'festival',icon:'🎭',name:'Fête des étoiles',text:'Offrez une nuit de paix à ceux qui bâtissent Astra.',gold:420,food:520,reward:'42 prospérité • +12 moral',prosperity:42,morale:12}
+  ];
+  function showKingdom(tab='overview') {
+    const rates=kingdomRates(),free=S.kingdom.population-assignedWorkers();
+    const tabs=`<div class="kingdomTabs"><button class="${tab==='overview'?'active':''}" onclick="EE.showKingdom('overview')">VUE D’ENSEMBLE</button><button class="${tab==='buildings'?'active':''}" onclick="EE.showKingdom('buildings')">DOMAINE</button><button class="${tab==='council'?'active':''}" onclick="EE.showKingdom('council')">CONSEIL</button></div>`;
+    let body='';
+    if(tab==='overview') body=`<div class="statGrid"><div class="stat"><small>SUJETS</small><b>${S.kingdom.population}/${populationCap()}</b></div><div class="stat"><small>MORAL</small><b>${Math.round(S.kingdom.morale)}%</b></div><div class="stat"><small>PROSPÉRITÉ</small><b>${S.kingdom.prosperity}</b></div></div>
+      <div class="balanceCard"><div class="balanceHead"><b>Balance horaire</b><span class="${rates.foodNet<0?'negative':''}">${rates.foodNet>=0?'+':''}${rates.foodNet} 🌾</span></div><div class="row"><span>Mine et marché</span><b>+${rates.gold} 🪙/h</b></div><div class="row"><span>Récoltes</span><b>+${rates.foodGross} 🌾/h</b></div><div class="row"><span>Consommation</span><b>−${rates.foodUse} 🌾/h</b></div></div>
+      <div class="row"><span>Travailleurs disponibles</span><b class="${free?'positive':''}">${free}</b></div>
+      ${[['mine','⛏️ Mine'],['farm','🌾 Fermes'],['forge','⚒️ Forge']].map(([key,label])=>`<div class="workerLine"><span>${label}</span><div class="workerControls"><button onclick="EE.assignWorker('${key}',-1)">−</button><b>${S.kingdom.workers[key]}</b><button ${free<=0?'disabled':''} onclick="EE.assignWorker('${key}',1)">+</button></div></div>`).join('')}
+      <button class="secondaryButton" ${S.kingdom.population>=populationCap()||S.gold<300||S.food<220?'disabled':''} onclick="EE.recruitSubject()">ACCUEILLIR UN SUJET — 300 🪙 + 220 🌾</button><p class="sheetLead" style="margin-top:9px">Les ouvriers améliorent la production. Les forgerons ajoutent 15 puissance chacun.</p>`;
+    if(tab==='buildings') body=`<p class="sheetLead">Chaque choix façonne votre économie. Les bâtiments secondaires ne peuvent dépasser le Château que d’un niveau.</p>${Object.entries(BUILDING_DATA).map(([key,b])=>`<div class="orderCard"><div class="balanceHead"><b>${b.icon} ${b.name}</b><span>Niv. ${S.buildings[key]}</span></div><p>${buildingBonus(key)}</p><button onclick="EE.showBuilding('${key}')">DÉTAILS • ${buildingCost(key)} 🪙 + ${buildingFoodCost(key)} 🌾</button></div>`).join('')}`;
+    if(tab==='council') body=`<p class="sheetLead">Promulguez un décret selon votre stratégie, puis répondez aux besoins du royaume pour gagner de la prospérité.</p>${['balance','harvest','trade','war'].map(key=>{const x=decreeData(key),active=S.kingdom.decree===key;return `<div class="decreeCard ${active?'active':''}"><b>${x.icon} ${x.name}</b><p>${x.desc}</p>${active?'<p class="positive">✓ Décret en vigueur</p>':`<button onclick="EE.setDecree('${key}')">PROMULGUER</button>`}</div>`}).join('')}<div class="sheetEyebrow" style="margin-top:16px">REQUÊTES DU PEUPLE</div>${KINGDOM_ORDERS.map(o=>{const done=S.kingdom.orders[o.id],ready=S.gold>=o.gold&&S.food>=o.food;return `<div class="orderCard ${ready&&!done?'ready':''}"><b>${o.icon} ${o.name}</b><p>${o.text}</p><p>Coût : ${o.gold} 🪙 + ${o.food} 🌾</p><p class="orderReward">Récompense : ${o.reward}</p>${done?'<p class="positive">✓ Requête accomplie</p>':`<button ${!ready?'disabled':''} onclick="EE.fulfillOrder('${o.id}')">HONORER LA REQUÊTE</button>`}</div>`}).join('')}<div class="sheetEyebrow" style="margin-top:16px">PALIERS DE PROSPÉRITÉ</div>${[[50,'Bourg florissant','+5% production'],[120,'Cité rayonnante','+10% production • +6% puissance'],[250,'Capitale éternelle','+15% production • +9% puissance']].map(([need,name,reward])=>`<div class="milestone ${S.kingdom.prosperity<need?'locked':''}"><span>${S.kingdom.prosperity>=need?'✓':'♛'}</span><div><b>${name} — ${need}</b><p>${reward}</p><div class="miniProgress"><i style="width:${Math.min(100,S.kingdom.prosperity/need*100)}%"></i></div></div></div>`).join('')}`;
+    showSheet(`<div class="sheetEyebrow">INTENDANCE D’ASTRA</div><h2 class="sheetTitle">Le royaume vivant</h2>${tabs}${body}`);
+  }
+  function assignWorker(key,delta) { if(!Object.prototype.hasOwnProperty.call(S.kingdom.workers,key))return;const next=S.kingdom.workers[key]+delta;if(next<0||assignedWorkers()+delta>S.kingdom.population)return;S.kingdom.workers[key]=next;refreshHUD();showKingdom('overview'); }
+  function recruitSubject() { if(S.kingdom.population>=populationCap()||S.gold<300||S.food<220)return;S.gold-=300;S.food-=220;S.kingdom.population++;S.kingdom.morale=Math.min(100,S.kingdom.morale+1);S.kingdom.prosperity+=2;refreshHUD();sound('victory');showKingdom('overview');toast('Un nouveau sujet rejoint Astra !'); }
+  function setDecree(key) { if(!['balance','harvest','trade','war'].includes(key))return;S.kingdom.decree=key;S.kingdom.morale=Math.max(0,S.kingdom.morale-1);refreshHUD();showKingdom('council');toast(`${decreeData().name} promulgué`); }
+  function fulfillOrder(id) { const o=KINGDOM_ORDERS.find(x=>x.id===id);if(!o||S.kingdom.orders[id]||S.gold<o.gold||S.food<o.food)return;S.gold-=o.gold;S.food-=o.food;S.gold+=o.goldReward||0;S.aether+=o.aether||0;S.kingdom.prosperity+=o.prosperity;S.kingdom.morale=clamp(S.kingdom.morale+(o.morale||0),0,100);S.kingdom.orders[id]=true;addPlayerXp(40);refreshHUD();sound('victory');haptic([15,30,15]);showKingdom('council');toast(`Requête accomplie : +${o.prosperity} prospérité`); }
 
   // =========================================================
   // Héros : amélioration et portail
@@ -415,7 +481,7 @@
     const node=CAMPAIGN.find((n)=>n.id===id);if(!node||id>S.campaign)return;const cost=missionCost(node);if(S.energy<cost)return;
     S.energy-=cost;S.battles++;refreshHUD();closeSheet();scene='battle';sceneTime=0;particles=[];floaters=[];projectiles=[];shake=0;
     battle={node,wave:1,totalWaves:node.waves,time:0,units:[],ended:false,won:false,waveDelay:0,timingDone:false,paused:false,combo:1,lastSkill:-99,skills:{bulwark:0,volley:0,nova:0},maxTeamHp:0,startAt:performance.now(),focus:null};
-    spawnWave(true);$('bottomNav').classList.add('hidden');$('sceneTitle').classList.add('hidden');$('battleHUD').classList.remove('hidden');$('combatActions').classList.remove('hidden');
+    spawnWave(true);$('bottomNav').classList.add('hidden');$('sceneTitle').classList.add('hidden');$('kingdomBtn').classList.add('hidden');$('battleHUD').classList.remove('hidden');$('combatActions').classList.remove('hidden');
     $('installBtn').classList.add('hidden');sound('skill');haptic(15);toast(`Mission ${id} — ${node.name}`);
   }
 
@@ -504,10 +570,10 @@
     setTimeout(()=>showResult(won),650);
   }
   function showResult(won) {
-    const node=battle.node;let stars=0,gold=0,aether=0,xp=0;
-    if(won){const allies=battle.units.filter(u=>u.ally&&!u.dead);const hp=allies.reduce((s,u)=>s+u.hp,0);const ratio=hp/Math.max(1,battle.maxTeamHp);stars=1+(ratio>.45?1:0)+(ratio>.72&&battle.time<70?1:0);gold=120+node.id*65;aether=node.boss?45:12+node.id;xp=Math.round((55+node.id*8)*(1+(S.buildings.guild-1)*.08));S.gold+=gold;S.aether+=aether;S.wins++;addPlayerXp(xp);const previous=S.nodeStars[node.id]||0;S.nodeStars[node.id]=Math.max(previous,stars);S.totalStars+=Math.max(0,stars-previous);if(node.id===S.campaign)S.campaign=Math.min(CAMPAIGN.length+1,S.campaign+1);if(node.boss)S.relics++;sound('victory');haptic([25,40,25]);}
+    const node=battle.node;let stars=0,gold=0,food=0,aether=0,xp=0;
+    if(won){const allies=battle.units.filter(u=>u.ally&&!u.dead);const hp=allies.reduce((s,u)=>s+u.hp,0);const ratio=hp/Math.max(1,battle.maxTeamHp);stars=1+(ratio>.45?1:0)+(ratio>.72&&battle.time<70?1:0);gold=120+node.id*65;food=75+node.id*24;aether=node.boss?45:12+node.id;xp=Math.round((55+node.id*8)*(1+(S.buildings.guild-1)*.08));S.gold+=gold;S.food+=food;S.aether+=aether;S.wins++;addPlayerXp(xp);const previous=S.nodeStars[node.id]||0;S.nodeStars[node.id]=Math.max(previous,stars);S.totalStars+=Math.max(0,stars-previous);if(node.id===S.campaign)S.campaign=Math.min(CAMPAIGN.length+1,S.campaign+1);if(node.boss)S.relics++;sound('victory');haptic([25,40,25]);}
     else{sound('defeat');haptic(80);}
-    refreshHUD();$('resultKicker').textContent=won?'MISSION ACCOMPLIE':'L’ESCOUADE A CÉDÉ';$('resultTitle').textContent=won?'VICTOIRE':'DÉFAITE';$('resultStars').textContent=won?'★'.repeat(stars)+'☆'.repeat(3-stars):'☠';$('resultSummary').textContent=won?`${node.enemy} est vaincu en ${Math.floor(battle.time)} secondes. La route suivante est désormais accessible.`:'Améliorez vos héros, votre forge ou changez le rythme de vos compétences avant de revenir.';$('resultLoot').innerHTML=won?`<span>🪙 ${gold}</span><span>✦ ${aether}</span><span>👑 ${xp} XP</span>`:'<span>💡 Les compétences interrompent l’avantage ennemi.</span>';$('resultContinue').textContent=won?'VOIR LA CARTE':'RETOURNER À LA CITADELLE';$('resultScreen').classList.remove('hidden');
+    refreshHUD();$('resultKicker').textContent=won?'MISSION ACCOMPLIE':'L’ESCOUADE A CÉDÉ';$('resultTitle').textContent=won?'VICTOIRE':'DÉFAITE';$('resultStars').textContent=won?'★'.repeat(stars)+'☆'.repeat(3-stars):'☠';$('resultSummary').textContent=won?`${node.enemy} est vaincu en ${Math.floor(battle.time)} secondes. La route suivante est désormais accessible.`:'Améliorez vos héros, votre forge ou changez le rythme de vos compétences avant de revenir.';$('resultLoot').innerHTML=won?`<span>🪙 ${gold}</span><span>🌾 ${food}</span><span>✦ ${aether}</span><span>👑 ${xp} XP</span>`:'<span>💡 Les compétences interrompent l’avantage ennemi.</span>';$('resultContinue').textContent=won?'VOIR LA CARTE':'RETOURNER À LA CITADELLE';$('resultScreen').classList.remove('hidden');
   }
   $('resultContinue').addEventListener('click',()=>{$('resultScreen').classList.add('hidden');battle=null;projectiles=[];floaters=[];particles=[];switchScene(scene==='battle'&&$('resultTitle').textContent==='VICTOIRE'?'map':'base');refreshHUD();});
 
@@ -536,12 +602,12 @@
     // Rivière animée
     ctx.fillStyle='#263e63';ctx.beginPath();ctx.moveTo(W*.63,H*.62);ctx.bezierCurveTo(W*.55,H*.72,W*.78,H*.78,W*.7,H);ctx.lineTo(W,H);ctx.bezierCurveTo(W*.86,H*.82,W*.73,H*.70,W*.77,H*.62);ctx.fill();for(let i=0;i<8;i++){ctx.strokeStyle=`rgba(117,179,229,${.1+i*.015})`;ctx.beginPath();const yy=H*.67+i*37+(t*.02%25);ctx.moveTo(W*.62,yy);ctx.lineTo(W*.79,yy+9);ctx.stroke();}
     drawCastle(W*.47,H*.57,1.12+S.buildings.castle*.045,t);
-    drawMine(W*.13,H*.66,.84,t);drawForge(W*.77,H*.61,.84,t);drawGuild(W*.19,H*.82,.78,t);
+    drawMine(W*.13,H*.66,.84,t);drawForge(W*.80,H*.61,.78,t);drawGuild(W*.16,H*.83,.68,t);drawFarm(W*.50,H*.82,.72,t);drawMarket(W*.80,H*.82,.66,t);
     // habitants
     for(const p of walkers){p.x+=p.v*dt/W;if(p.x<-.05)p.x=1.05;if(p.x>1.05)p.x=-.05;drawTinyPerson(p.x*W,p.y*H,p.color,t+p.x*9);}
     // points interactifs
     const basePulse=1+Math.sin(t*.004)*.06;
-    const defs=[['castle',W*.47,H*.45,'CHÂTEAU'],['mine',W*.13,H*.62,'MINE'],['forge',W*.77,H*.56,'FORGE'],['guild',W*.19,H*.78,'HÉROS']];
+    const defs=[['castle',W*.47,H*.45,'CHÂTEAU'],['mine',W*.13,H*.62,'MINE'],['forge',W*.80,H*.56,'FORGE'],['guild',W*.16,H*.79,'HÉROS'],['farm',W*.50,H*.78,'FERMES'],['market',W*.80,H*.78,'MARCHÉ']];
     for(const [key,x,y,label] of defs){hotspots.push({type:'building',key,x,y,r:42});ctx.save();ctx.translate(x,y-45);ctx.scale(basePulse,basePulse);ctx.fillStyle='rgba(12,9,28,.82)';rounded(-34,-10,68,20,9);ctx.fill();ctx.strokeStyle='#7c679f';ctx.stroke();text(label,0,4,7,'#e9ddff');ctx.restore();}
     if(S.production>=1){const x=W*.13,y=H*.53;ctx.fillStyle='#f2c45e';ctx.beginPath();ctx.arc(x,y,16+Math.sin(t*.005)*2,0,Math.PI*2);ctx.fill();text('🪙',x,y+5,15,'#201401');hotspots.push({type:'collect',x,y,r:28});}
     drawParticles(dt);
@@ -551,6 +617,8 @@
   function drawMine(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#312c3b';ctx.beginPath();ctx.moveTo(-48,34);ctx.lineTo(-34,-15);ctx.lineTo(0,-42);ctx.lineTo(42,-20);ctx.lineTo(54,34);ctx.fill();ctx.fillStyle='#11101b';ctx.beginPath();ctx.arc(0,30,24,Math.PI,0);ctx.fill();ctx.fillRect(-24,28,48,20);ctx.strokeStyle='#8c6b45';ctx.lineWidth=4;ctx.strokeRect(-28,3,56,47);ctx.fillStyle='#75c7ff';ctx.globalAlpha=.6+.3*Math.sin(t*.006);for(const [px,py] of[[-34,-5],[38,8],[8,-25]]){ctx.beginPath();ctx.moveTo(px,py-7);ctx.lineTo(px+6,py);ctx.lineTo(px,py+7);ctx.lineTo(px-5,py);ctx.fill();}ctx.globalAlpha=1;ctx.restore();}
   function drawForge(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#49404a';ctx.fillRect(-45,-30,90,74);ctx.fillStyle='#9b4c37';ctx.beginPath();ctx.moveTo(-52,-30);ctx.lineTo(0,-65);ctx.lineTo(52,-30);ctx.fill();ctx.fillStyle='#2a1c1c';ctx.fillRect(-20,5,40,39);const glow=.55+.35*Math.sin(t*.008);ctx.fillStyle=`rgba(255,110,43,${glow})`;ctx.fillRect(-14,13,28,25);ctx.fillStyle='#555';ctx.fillRect(26,-75,17,60);ctx.globalAlpha=.18;ctx.fillStyle='#ddd';ctx.beginPath();ctx.arc(35,-90-(t*.01%25),12,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.restore();}
   function drawGuild(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#50485f';ctx.fillRect(-55,-30,110,70);ctx.fillStyle='#6f4a61';ctx.beginPath();ctx.moveTo(-65,-30);ctx.lineTo(0,-69);ctx.lineTo(65,-30);ctx.fill();ctx.fillStyle='#282139';ctx.fillRect(-14,2,28,38);ctx.strokeStyle='#f2c45e';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,-42);ctx.lineTo(7,-25);ctx.moveTo(7,-42);ctx.lineTo(-7,-25);ctx.stroke();ctx.restore();}
+  function drawFarm(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#4c3a32';ctx.fillRect(-31,-24,62,58);ctx.fillStyle='#8d5444';ctx.beginPath();ctx.moveTo(-42,-24);ctx.lineTo(0,-55);ctx.lineTo(42,-24);ctx.fill();ctx.fillStyle='#241c25';ctx.fillRect(-9,7,18,27);ctx.strokeStyle='#d2aa4f';ctx.lineWidth=2;for(let i=-48;i<=48;i+=12){ctx.beginPath();ctx.moveTo(i,42);ctx.quadraticCurveTo(i+4,22+Math.sin(t*.003+i)*2,i+7,15);ctx.stroke();}ctx.restore();}
+  function drawMarket(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);for(const dx of[-30,20]){ctx.fillStyle=dx<0?'#a74858':'#4d70a5';ctx.fillRect(dx,-20,38,45);ctx.fillStyle='#e7c77c';ctx.beginPath();ctx.moveTo(dx-5,-20);ctx.lineTo(dx+19,-44);ctx.lineTo(dx+43,-20);ctx.fill();}ctx.strokeStyle='#e5bd5d';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-38,31);ctx.lineTo(54,31);ctx.stroke();ctx.fillStyle='#f1cf70';ctx.globalAlpha=.6+.3*Math.sin(t*.005);ctx.beginPath();ctx.arc(10,-49,5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.restore();}
   function drawTinyPerson(x,y,color,t){ctx.save();ctx.translate(x,y);const b=Math.sin(t*6)*1.5;ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(0,4,5,2,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.fillRect(-3,-8+b,6,10);ctx.fillStyle='#dcb894';ctx.beginPath();ctx.arc(0,-11+b,3,0,Math.PI*2);ctx.fill();ctx.restore();}
 
   function drawMap(t,dt){
@@ -678,7 +746,7 @@
   // Boucle principale
   // =========================================================
   function updateTiming(now){if(!timing||timing.resolved)return;const elapsed=now-timing.start;const phase=(elapsed%1500)/1500;timing.scale=2.5-1.75*phase;$('timingRing').style.transform=`scale(${timing.scale})`;if(elapsed>timing.duration)resolveTiming(true);}
-  function updateProduction(dt){productionAccumulator+=dt;if(productionAccumulator>=1){const seconds=Math.floor(productionAccumulator);productionAccumulator-=seconds;const hourly=90+S.buildings.mine*45;const cap=hourly*8;S.production=Math.min(cap,(S.production||0)+hourly/3600*seconds);}}
+  function updateProduction(dt){productionAccumulator+=dt;if(productionAccumulator>=1){const seconds=Math.floor(productionAccumulator);productionAccumulator-=seconds;const rates=kingdomRates(),cap=Math.max(1,rates.gold*8);S.production=Math.min(cap,(S.production||0)+rates.gold/3600*seconds);S.food=Math.max(0,S.food+rates.foodNet/3600*seconds);if(S.food<=0&&rates.foodNet<0)S.kingdom.morale=Math.max(15,S.kingdom.morale-seconds/450);else if(rates.foodNet>0&&S.food>100)S.kingdom.morale=Math.min(100,S.kingdom.morale+seconds/7200);$('food').textContent=formatNumber(S.food);$('kingdomPulse').textContent=`${S.kingdom.population}/${populationCap()} sujets • ${rates.foodNet>=0?'+':''}${rates.foodNet} 🌾/h`;}}
   function frame(now){let dt=Math.min(.05,(now-lastFrame)/1000||0);lastFrame=now;updateProduction(dt);updateTiming(now);if(scene==='battle')updateBattle(dt);else sceneTime+=dt;
     ctx.save();if(shake>0){ctx.translate(rand(-shake,shake),rand(-shake,shake));shake=Math.max(0,shake-30*dt);}if(scene==='base')drawBase(now,dt);else if(scene==='map')drawMap(now,dt);else if(scene==='heroes')drawHeroes(now,dt);else if(scene==='portal')drawPortal(now,dt);else if(scene==='battle'&&battle)drawBattle(now,dt);ctx.restore();requestAnimationFrame(frame);}
 
@@ -689,17 +757,17 @@
   $('installBtn').addEventListener('click',installApp);
   async function installApp(){closeSheet();if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('installBtn').classList.add('hidden');}else{toast('Sur iPhone : Partager → Sur l’écran d’accueil');}}
   if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(error=>console.warn('Service worker',error)));
-  function claimOffline(){if(!pendingOffline)return;S.gold+=pendingOffline.gold;S.energy=Math.min(100,S.energy+pendingOffline.energy);pendingOffline=null;$('offlineReward').classList.add('hidden');sound('coin');haptic([15,25,15]);refreshHUD();}
+  function claimOffline(){if(!pendingOffline)return;S.gold+=pendingOffline.gold;S.food=Math.max(0,S.food+pendingOffline.food);if(pendingOffline.food<0&&S.food===0)S.kingdom.morale=Math.max(15,S.kingdom.morale-8);S.energy=Math.min(100,S.energy+pendingOffline.energy);pendingOffline=null;$('offlineReward').classList.add('hidden');sound('coin');haptic([15,25,15]);refreshHUD();}
   $('offlineClaim').addEventListener('click',claimOffline);
-  function showOffline(){if(!pendingOffline)return;$('offlineText').textContent=`Pendant ${pendingOffline.minutes} minutes, la mine a produit ${pendingOffline.gold} or et votre armée a récupéré ${pendingOffline.energy} énergie.`;$('offlineReward').classList.remove('hidden');}
+  function showOffline(){if(!pendingOffline)return;const foodText=pendingOffline.food>=0?`les fermes ont ajouté ${pendingOffline.food} provisions`:`le peuple a consommé ${Math.abs(pendingOffline.food)} provisions`;$('offlineText').textContent=`Pendant ${pendingOffline.minutes} minutes, le domaine a produit ${pendingOffline.gold} or, ${foodText} et récupéré ${pendingOffline.energy} énergie.`;$('offlineReward').classList.remove('hidden');}
 
   window.EE={
     claimQuest,upgradeBuilding,collectProduction,upgradeHero,summon,startMission,
-    switchScene,showMission,showHeroesPanel,showPortalPanel,install:installApp,
+    switchScene,showMission,showHeroesPanel,showPortalPanel,showBuilding,showKingdom,assignWorker,recruitSubject,setDecree,fulfillOrder,install:installApp,
     toggleSound(){S.sound=!S.sound;saveState();$('sheetClose').click();$('profileBtn').click();},
     toggleHaptics(){S.haptics=!S.haptics;saveState();$('sheetClose').click();$('profileBtn').click();}
   };
-  window.__EE_TEST__={getState:()=>JSON.parse(JSON.stringify(S)),getScene:()=>scene,teamPower,startMission,useSkill,triggerTiming,resolveTiming,finishBattle,switchScene,reset(){localStorage.removeItem(SAVE_KEY);location.reload();}};
+  window.__EE_TEST__={getState:()=>JSON.parse(JSON.stringify(S)),getScene:()=>scene,teamPower,kingdomRates,showKingdom,assignWorker,setDecree,fulfillOrder,startMission,useSkill,triggerTiming,resolveTiming,finishBattle,switchScene,reset(){localStorage.removeItem(SAVE_KEY);location.reload();}};
 
   // Démarrage
   refreshHUD();switchScene('base');
@@ -707,7 +775,7 @@
     S.tutorialSeen=true;
     if(captureMode==='battle'){setTimeout(()=>startMission(1),120);}
     else if(['base','map','heroes','portal'].includes(captureMode)){switchScene(captureMode);}
-  } else if(!S.tutorialSeen){S.tutorialSeen=true;setTimeout(()=>showSheet(`<div class="sheetEyebrow">BIENVENUE, SOUVERAIN</div><h2 class="sheetTitle">La Fracture s’éveille</h2><p class="sheetLead">Votre citadelle vit, produit et grandit. Reprenez les douze territoires, améliorez vos trois héros et maîtrisez la Frappe temporelle.</p><div class="rewardPills"><span class="pill">🏰 Bâtir</span><span class="pill">🗺️ Explorer</span><span class="pill">⚔️ Commander</span></div><button class="primaryButton" onclick="document.getElementById('sheetClose').click();EE.switchScene('map')">COMMENCER LA CAMPAGNE</button>`),450);}
+  } else if(!S.tutorialSeen){S.tutorialSeen=true;setTimeout(()=>showSheet(`<div class="sheetEyebrow">BIENVENUE, SOUVERAIN</div><h2 class="sheetTitle">Un royaume à gouverner</h2><p class="sheetLead">Affectez vos sujets, équilibrez or et provisions, choisissez un décret et faites prospérer Astra. Votre économie décidera de la force de vos héros.</p><div class="rewardPills"><span class="pill">♛ Gouverner</span><span class="pill">🏰 Bâtir</span><span class="pill">⚔️ Reconquérir</span></div><button class="primaryButton" onclick="EE.showKingdom('overview')">OUVRIR L’INTENDANCE</button>`),450);}
   if(!captureMode)setTimeout(showOffline,700);
   setInterval(()=>{S.lastSeen=Date.now();saveState();},30000);
   requestAnimationFrame(frame);
