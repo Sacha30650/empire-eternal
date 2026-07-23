@@ -42,7 +42,10 @@ async def main():
         await send('Storage.clearDataForOrigin', {'origin': 'http://127.0.0.1:8080', 'storageTypes': 'all'})
         await send('Page.navigate', {'url': 'http://127.0.0.1:8080/?capture=base'})
         await asyncio.sleep(1.2)
-        initial = await evaluate("({state:__EE_TEST__.getState(),rates:__EE_TEST__.kingdomRates(),power:__EE_TEST__.teamPower()})")
+        initial = await evaluate("({state:__EE_TEST__.getState(),rates:__EE_TEST__.kingdomRates(),power:__EE_TEST__.teamPower(),art:__EE_TEST__.baseArtReady(),buildings:__EE_TEST__.getHotspots().filter(h=>h.type==='building').map(h=>h.key).sort()})")
+        base_image = await send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': False})
+        with open('/root/empire-eternal/v5-citadel-mobile.png', 'wb') as handle:
+            handle.write(base64.b64decode(base_image['result']['data']))
         await evaluate("__EE_TEST__.showKingdom('overview')")
         await asyncio.sleep(.15)
         overview = await evaluate("({open:!document.getElementById('sheet').classList.contains('hidden'),tabs:document.querySelectorAll('.kingdomTabs button').length,workers:document.querySelectorAll('.workerLine').length,title:document.querySelector('.sheetTitle').textContent})")
@@ -55,6 +58,7 @@ async def main():
         order = await evaluate("({state:__EE_TEST__.getState(),council:document.getElementById('sheetContent').textContent.includes('Requête accomplie')})")
         checks = {
             'v5_state': initial['state']['version'] == 5 and initial['state']['food'] >= 899,
+            'painted_citadel': initial['art'] and initial['buildings'] == ['castle', 'farm', 'forge', 'guild', 'market', 'mine'],
             'economy_positive': initial['rates']['gold'] > 0 and initial['rates']['foodNet'] > 0,
             'dashboard': overview == {'open': True, 'tabs': 3, 'workers': 3, 'title': 'Le royaume vivant'},
             'worker_assignment': changed['state']['kingdom']['workers']['mine'] == 5,
