@@ -1,4 +1,4 @@
-const CACHE = 'empire-eternal-v5.2.0';
+const CACHE = 'empire-eternal-v6.0.0';
 const APP_SHELL = [
   './', './index.html', './styles.css', './game.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
