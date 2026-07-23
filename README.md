@@ -48,3 +48,9 @@ Les unités de combat principales utilisent des sprites dark fantasy 2.5D origin
 La Citadelle utilise désormais un décor nocturne 2.5D peint, optimisé en WebP, avec six points d’intérêt alignés sur les zones tactiles du Canvas. Des halos, brumes, lucioles, habitants et marqueurs de niveau restent animés en temps réel au-dessus du décor. Le rendu géométrique précédent sert automatiquement de secours si l’image ne peut pas être chargée.
 
 Les combats du biome Ruines utilisent également un décor vertical peint dédié : architecture gothique brisée, sol d’obsidienne, brume violette et zone tactique centrale dégagée. L’asset WebP est préchargé par le Service Worker et le terrain procédural reste disponible en secours.
+
+## Version 6 — Royaume stratégique
+
+La gestion du royaume repose maintenant sur une boucle plus active : deux bâtisseurs améliorent les bâtiments avec des temps de chantier persistants, le Hall forme des Sentinelles, Rôdeurs et Arcanistes, et la Garde protège Astra ou part piller des domaines rivaux générés. Les raids comparent la puissance de l’armée à une défense estimée, accordent du butin, provoquent des pertes et déclenchent un temps de retour ainsi qu’un bouclier temporaire. Des attaques défensives peuvent également survenir lorsque le domaine reste exposé.
+
+Les habitants visibles dans la Citadelle possèdent désormais six silhouettes animées et identifiables : garde, fermier, marchand, mage, bâtisseur et rôdeur. Les chantiers actifs sont signalés directement au-dessus du bâtiment concerné.

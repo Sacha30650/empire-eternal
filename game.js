@@ -2,11 +2,11 @@
   'use strict';
 
   // =========================================================
-  // EMPIRE ETERNAL v5 — royaume vivant, progression et migration
+  // EMPIRE ETERNAL v6 — royaume vivant, bâtisseurs, garde et raids
   // =========================================================
   const SAVE_KEY = 'empire-eternal-v4';
   const OLD_KEY = 'empirefx';
-  const VERSION = 5;
+  const VERSION = 6;
   const $ = (id) => document.getElementById(id);
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
@@ -40,6 +40,12 @@
     {id:12,x:.27, y:.16, region:'Faille d’Onyx', name:'Kaeltherion éternel', biome:'cosmic', enemy:'Kaeltherion, Roi-Némésis', power:4200, waves:3, boss:true}
   ];
 
+  const TROOP_DATA = {
+    guard:{name:'Sentinelle',icon:'🛡️',desc:'Infanterie robuste pour défendre les remparts.',gold:150,food:90,time:18,power:90,color:'#6d8ee8'},
+    ranger:{name:'Rôdeur',icon:'🏹',desc:'Tireur mobile, efficace pendant les raids.',gold:210,food:120,time:24,power:130,color:'#58d49a'},
+    arcanist:{name:'Arcaniste',icon:'🔮',desc:'Unité rare qui amplifie fortement l’assaut.',gold:320,food:170,time:32,power:190,color:'#b77aff'}
+  };
+
   const QUEST_TEMPLATES = [
     {id:'wins', title:'Briser la ligne', text:'Remporte 2 missions', target:2, reward:{gold:500}, metric:'wins'},
     {id:'skills', title:'Maîtrise tactique', text:'Utilise 6 compétences', target:6, reward:{aether:35}, metric:'skills'},
@@ -58,7 +64,7 @@
       heroes:[newHero('maeve'), newHero('lyra'), newHero('orion')],
       active:['maeve','lyra','orion'],
       buildings:{castle:1, mine:1, farm:1, forge:1, guild:1, market:1},
-      kingdom:{population:12,morale:72,prosperity:0,workers:{mine:4,farm:4,forge:2},decree:'balance',orders:{},lastMoraleTick:Date.now()},
+      kingdom:{population:12,morale:72,prosperity:0,workers:{mine:4,farm:4,forge:2},decree:'balance',orders:{},lastMoraleTick:Date.now(),builders:2,buildQueue:[],army:{guard:0,ranger:0,arcanist:0},trainingQueue:[],raidTarget:null,raidCooldownUntil:0,shieldUntil:0,raidWins:0,raidLosses:0,defenseWins:0,defenseLosses:0,lastRaid:null,lastDefenseCheck:Date.now()},
       production:0, productionTick:Date.now(), lastSeen:Date.now(),
       portalPity:0, portalPulls:0, freePullDate:'',
       questsDate:todayKey(), questClaims:{},
@@ -107,6 +113,10 @@
     state.kingdom = {...base.kingdom, ...(input.kingdom || {})};
     state.kingdom.workers = {...base.kingdom.workers, ...((input.kingdom && input.kingdom.workers) || {})};
     state.kingdom.orders = {...((input.kingdom && input.kingdom.orders) || {})};
+    state.kingdom.army = {...base.kingdom.army, ...((input.kingdom && input.kingdom.army) || {})};
+    state.kingdom.buildQueue = Array.isArray(state.kingdom.buildQueue) ? state.kingdom.buildQueue : [];
+    state.kingdom.trainingQueue = Array.isArray(state.kingdom.trainingQueue) ? state.kingdom.trainingQueue : [];
+    state.kingdom.builders = clamp(Number(state.kingdom.builders)||2,2,3);
     state.food = Number.isFinite(Number(state.food)) ? Number(state.food) : base.food;
     state.nodeStars = input.nodeStars || {};
     state.questClaims = input.questClaims || {};
@@ -378,6 +388,11 @@
   function buildingCost(key) { const level=S.buildings[key],base={castle:900,mine:420,farm:380,forge:650,guild:550,market:520}[key];return Math.floor(base*Math.pow(1.72,level-1)); }
   function buildingFoodCost(key) { return key==='castle'?Math.floor(260*Math.pow(1.48,S.buildings[key]-1)):Math.floor(({mine:90,farm:70,forge:150,guild:120,market:110}[key]||80)*Math.pow(1.42,S.buildings[key]-1)); }
   function buildingLocked(key) { return key!=='castle'&&S.buildings[key]>=S.buildings.castle+1; }
+  function builderCount() { return clamp((Number(S.kingdom.builders)||2)+(S.buildings.castle>=4?1:0),2,3); }
+  function availableBuilders() { return Math.max(0,builderCount()-S.kingdom.buildQueue.length); }
+  function activeConstruction(key) { return S.kingdom.buildQueue.find(job=>job.key===key); }
+  function buildingDuration(key) { const weight={castle:1.55,mine:1,farm:.9,forge:1.3,guild:1.2,market:1.05}[key]||1;return Math.round((14+S.buildings[key]*11)*weight); }
+  function formatDuration(ms) { const total=Math.max(0,Math.ceil(ms/1000)),m=Math.floor(total/60),s=total%60;return m?`${m}m ${String(s).padStart(2,'0')}s`:`${s}s`; }
   function buildingBonus(key) {
     const l=S.buildings[key];
     if(key==='castle')return `${populationCap()} habitants • +${(l-1)*4}% PV`;
@@ -387,20 +402,36 @@
     if(key==='guild')return `+${(l-1)*8}% XP • +${l*2} places`;
     return `+${(l-1)*28} or/h permanent`;
   }
+  function processKingdomTimers(now=Date.now(),silent=false) {
+    let completed=false;
+    const remaining=[];
+    for(const job of S.kingdom.buildQueue){
+      if(Number(job.endsAt)>now){remaining.push(job);continue;}
+      if(S.buildings[job.key]<job.target){S.buildings[job.key]=job.target;S.upgrades++;S.kingdom.prosperity+=5+job.target*2;if(silent)S.xp+=35+job.target*8;else addPlayerXp(35+job.target*8);completed=true;if(!silent)toast(`${BUILDING_DATA[job.key].name} niveau ${job.target} terminé !`);}
+    }
+    S.kingdom.buildQueue=remaining;
+    const training=[];
+    for(const job of S.kingdom.trainingQueue){if(Number(job.endsAt)>now){training.push(job);continue;}if(TROOP_DATA[job.type]){S.kingdom.army[job.type]=(S.kingdom.army[job.type]||0)+1;completed=true;if(!silent)toast(`${TROOP_DATA[job.type].name} rejoint la garde !`);}}
+    S.kingdom.trainingQueue=training;
+    if(completed){saveState();}if(completed&&!silent){sound('victory');haptic([10,20,10]);refreshHUD();if(!$('sheet').classList.contains('hidden'))showKingdom(currentKingdomTab);}
+    return completed;
+  }
   function showBuilding(key) {
-    const data=BUILDING_DATA[key],level=S.buildings[key],cost=buildingCost(key),foodCost=buildingFoodCost(key),locked=buildingLocked(key);
+    const data=BUILDING_DATA[key],level=S.buildings[key],cost=buildingCost(key),foodCost=buildingFoodCost(key),locked=buildingLocked(key),job=activeConstruction(key),builders=availableBuilders();
     showSheet(`<div class="sheetEyebrow">BÂTIMENT DE LA CITADELLE</div><h2 class="sheetTitle">${data.icon} ${data.name}</h2><p class="sheetLead">${data.desc}</p>
-      <div class="statGrid"><div class="stat"><small>NIVEAU</small><b>${level}</b></div><div class="stat"><small>BONUS</small><b>${buildingBonus(key)}</b></div><div class="stat"><small>PROCHAIN</small><b>Niv. ${level+1}</b></div></div>
+      <div class="statGrid"><div class="stat"><small>NIVEAU</small><b>${level}</b></div><div class="stat"><small>BONUS</small><b>${buildingBonus(key)}</b></div><div class="stat"><small>BÂTISSEURS</small><b>${builders}/${builderCount()}</b></div></div>
       ${key==='mine'?`<div class="row"><span>Stock produit</span><b>${Math.floor(S.production)} 🪙</b></div><button class="secondaryButton" ${S.production<1?'disabled':''} onclick="EE.collectProduction()">RÉCOLTER LA PRODUCTION</button>`:''}
+      ${job?`<div class="constructionCard"><div class="balanceHead"><b>🔨 Amélioration vers niv. ${job.target}</b><span class="liveTimer" data-ends="${job.endsAt}">${formatDuration(job.endsAt-Date.now())}</span></div><div class="progress"><i style="width:${clamp((Date.now()-job.startedAt)/(job.endsAt-job.startedAt)*100,0,100)}%"></i></div><button onclick="EE.speedUpBuild('${job.id}')">TERMINER — ${Math.max(1,Math.ceil((job.endsAt-Date.now())/15000))} ✦</button></div>`:''}
       ${locked?`<p class="sheetLead">🔒 Améliorez le Château au niveau ${S.buildings.castle+1} pour poursuivre.</p>`:''}
-      <button class="primaryButton" ${locked||S.gold<cost||S.food<foodCost?'disabled':''} onclick="EE.upgradeBuilding('${key}')">AMÉLIORER — ${cost} 🪙 + ${foodCost} 🌾</button>
+      ${!job?`<button class="primaryButton" ${locked||builders<=0||S.gold<cost||S.food<foodCost?'disabled':''} onclick="EE.upgradeBuilding('${key}')">${builders<=0?'BÂTISSEURS OCCUPÉS':`AMÉLIORER • ${formatDuration(buildingDuration(key)*1000)} — ${cost} 🪙 + ${foodCost} 🌾`}</button>`:''}
       <button class="secondaryButton" onclick="EE.showKingdom('buildings')">VOIR TOUT LE DOMAINE</button>`);
   }
   function upgradeBuilding(key) {
-    const cost=buildingCost(key),foodCost=buildingFoodCost(key);if(S.gold<cost||S.food<foodCost||buildingLocked(key))return;
-    S.gold-=cost;S.food-=foodCost;S.buildings[key]++;S.upgrades++;S.kingdom.prosperity+=5+S.buildings[key]*2;addPlayerXp(35+S.buildings[key]*8);refreshHUD();
-    sound('victory');haptic([15,30,15]);flash('#f2c45e',.28);addParticles(W/2,H*.55,'#f2c45e',38,210);showBuilding(key);toast(`${BUILDING_DATA[key].name} niveau ${S.buildings[key]} !`);
+    const cost=buildingCost(key),foodCost=buildingFoodCost(key);if(S.gold<cost||S.food<foodCost||buildingLocked(key)||availableBuilders()<=0||activeConstruction(key))return;
+    const now=Date.now(),duration=buildingDuration(key)*1000;S.gold-=cost;S.food-=foodCost;S.kingdom.buildQueue.push({id:uid(),key,target:S.buildings[key]+1,startedAt:now,endsAt:now+duration});saveState();refreshHUD();
+    sound('skill');haptic(12);addParticles(W/2,H*.55,'#f2c45e',24,150);showBuilding(key);toast(`Bâtisseur affecté à ${BUILDING_DATA[key].name}`);
   }
+  function speedUpBuild(id) { const job=S.kingdom.buildQueue.find(x=>x.id===id);if(!job)return;const cost=Math.max(1,Math.ceil((job.endsAt-Date.now())/15000));if(S.aether<cost)return;S.aether-=cost;job.endsAt=Date.now();processKingdomTimers(Date.now(),false); }
   function collectProduction() {
     const amount=Math.floor(S.production);if(amount<1)return;S.production-=amount;S.gold+=amount;refreshHUD();sound('coin');haptic(15);showBuilding('mine');toast(`+${amount} or récolté`);
   }
@@ -410,16 +441,56 @@
     {id:'caravan',icon:'🐎',name:'Caravane des Marches',text:'Financez une route sûre vers les villages voisins.',gold:620,food:140,reward:'30 prospérité • 260 or',prosperity:30,goldReward:260,morale:3},
     {id:'festival',icon:'🎭',name:'Fête des étoiles',text:'Offrez une nuit de paix à ceux qui bâtissent Astra.',gold:420,food:520,reward:'42 prospérité • +12 moral',prosperity:42,morale:12}
   ];
+  let currentKingdomTab='overview';
+  function trainingCapacity() { return 4+S.buildings.guild*2; }
+  function armySize() { return Object.values(S.kingdom.army).reduce((sum,n)=>sum+(Number(n)||0),0); }
+  function armyPower() { return Object.entries(TROOP_DATA).reduce((sum,[key,t])=>sum+(S.kingdom.army[key]||0)*t.power,0); }
+  function defensePower() { return Math.round(180+S.buildings.castle*95+S.buildings.forge*55+armyPower()*.72+S.kingdom.prosperity*1.5); }
+  function trainTroop(type) {
+    const troop=TROOP_DATA[type];if(!troop||S.gold<troop.gold||S.food<troop.food||S.kingdom.trainingQueue.length>=trainingCapacity())return;
+    const now=Date.now(),last=S.kingdom.trainingQueue[S.kingdom.trainingQueue.length-1],startedAt=Math.max(now,last?last.endsAt:now),endsAt=startedAt+troop.time*1000;
+    S.gold-=troop.gold;S.food-=troop.food;S.kingdom.trainingQueue.push({id:uid(),type,startedAt,endsAt});saveState();refreshHUD();sound('tap');showKingdom('guard');toast(`${troop.name} placé en entraînement`);
+  }
+  function speedUpTraining(id) { const job=S.kingdom.trainingQueue.find(x=>x.id===id);if(!job)return;const cost=Math.max(1,Math.ceil((job.endsAt-Date.now())/15000));if(S.aether<cost)return;S.aether-=cost;job.endsAt=Date.now();processKingdomTimers(Date.now(),false); }
+  function scoutRaid() {
+    if(S.gold<80)return;S.gold-=80;const names=['Bastion de Verre','Clan du Corbeau','Fort d’Onyx','Domaine des Brumes','Rempart Solaire','Tour des Exilés'],base=Math.max(260,defensePower());const power=Math.round(base*(.72+Math.random()*.5));
+    S.kingdom.raidTarget={name:pick(names),power,gold:Math.round(power*(1.05+Math.random()*.35)),food:Math.round(power*(.55+Math.random()*.25))};saveState();refreshHUD();showKingdom('guard');toast('Un domaine rival a été repéré');
+  }
+  function applyRaidCasualties(rate) { const lost={};for(const key of Object.keys(TROOP_DATA)){const count=S.kingdom.army[key]||0,loss=Math.min(count,Math.floor(count*rate+Math.random()*.85));if(loss){S.kingdom.army[key]-=loss;lost[key]=loss;}}return lost; }
+  function launchRaid() {
+    const target=S.kingdom.raidTarget,now=Date.now();if(!target||now<S.kingdom.raidCooldownUntil||armySize()<1||S.energy<5)return;
+    S.energy-=5;const strike=Math.round((armyPower()+teamPower()*.24)*(.88+Math.random()*.28)),won=strike>=target.power,lost=applyRaidCasualties(won?.13:.34);S.kingdom.raidCooldownUntil=now+90000;S.kingdom.shieldUntil=now+5*60000;
+    if(won){S.gold+=target.gold;S.food+=target.food;S.kingdom.prosperity+=8;S.kingdom.morale=clamp(S.kingdom.morale+2,0,100);S.kingdom.raidWins++;addPlayerXp(45);}else{S.kingdom.morale=clamp(S.kingdom.morale-3,0,100);S.kingdom.raidLosses++;}
+    S.kingdom.lastRaid={won,target:target.name,strike,enemy:target.power,gold:won?target.gold:0,food:won?target.food:0,lost,at:now};S.kingdom.raidTarget=null;saveState();refreshHUD();sound(won?'victory':'hit');haptic(won?[15,25,15]:40);addParticles(W/2,H*.45,won?'#f2c45e':'#e45f6f',won?42:24,210);showKingdom('guard');toast(won?'Raid victorieux : butin sécurisé !':'Assaut repoussé : renforcez votre garde');
+  }
+  function maybeResolveDefense(now=Date.now()) {
+    if(now-(Number(S.kingdom.lastDefenseCheck)||now)<8*60000)return;S.kingdom.lastDefenseCheck=now;if(now<S.kingdom.shieldUntil||Math.random()>.35)return;
+    const enemy=Math.round(defensePower()*(.72+Math.random()*.62)),won=defensePower()*(.9+Math.random()*.25)>=enemy;S.kingdom.shieldUntil=now+4*60000;
+    if(won){S.kingdom.defenseWins++;S.gold+=90+S.buildings.castle*30;}else{S.kingdom.defenseLosses++;const stolen=Math.min(Math.floor(S.production),Math.round(40+enemy*.08));S.production=Math.max(0,S.production-stolen);S.kingdom.morale=clamp(S.kingdom.morale-3,0,100);}
+    S.kingdom.lastRaid={won,defense:true,target:'Raid nocturne',strike:defensePower(),enemy,gold:0,food:0,lost:{},at:now};saveState();toast(won?'🛡️ La garde a repoussé un raid !':'⚠️ Un raid ennemi a pillé la mine');refreshHUD();
+  }
   function showKingdom(tab='overview') {
+    if(!['overview','buildings','guard','council'].includes(tab))tab='overview';currentKingdomTab=tab;
     const rates=kingdomRates(),free=S.kingdom.population-assignedWorkers();
-    const tabs=`<div class="kingdomTabs"><button class="${tab==='overview'?'active':''}" onclick="EE.showKingdom('overview')">VUE D’ENSEMBLE</button><button class="${tab==='buildings'?'active':''}" onclick="EE.showKingdom('buildings')">DOMAINE</button><button class="${tab==='council'?'active':''}" onclick="EE.showKingdom('council')">CONSEIL</button></div>`;
+    const tabs=`<div class="kingdomTabs"><button class="${tab==='overview'?'active':''}" onclick="EE.showKingdom('overview')">ROYAUME</button><button class="${tab==='buildings'?'active':''}" onclick="EE.showKingdom('buildings')">DOMAINE</button><button class="${tab==='guard'?'active':''}" onclick="EE.showKingdom('guard')">GARDE</button><button class="${tab==='council'?'active':''}" onclick="EE.showKingdom('council')">CONSEIL</button></div>`;
     let body='';
     if(tab==='overview') body=`<div class="statGrid"><div class="stat"><small>SUJETS</small><b>${S.kingdom.population}/${populationCap()}</b></div><div class="stat"><small>MORAL</small><b>${Math.round(S.kingdom.morale)}%</b></div><div class="stat"><small>PROSPÉRITÉ</small><b>${S.kingdom.prosperity}</b></div></div>
+      <div class="builderStrip"><div><span>🔨</span><b>${availableBuilders()}/${builderCount()} bâtisseurs libres</b><small>${S.kingdom.buildQueue.length?`${S.kingdom.buildQueue.length} chantier en cours`:'Le domaine est prêt à évoluer'}</small></div><button onclick="EE.showKingdom('buildings')">GÉRER</button></div>
+      ${S.kingdom.buildQueue.map(job=>`<div class="queueMini"><span>${BUILDING_DATA[job.key].icon} ${BUILDING_DATA[job.key].name}</span><b class="liveTimer" data-ends="${job.endsAt}">${formatDuration(job.endsAt-Date.now())}</b></div>`).join('')}
       <div class="balanceCard"><div class="balanceHead"><b>Balance horaire</b><span class="${rates.foodNet<0?'negative':''}">${rates.foodNet>=0?'+':''}${rates.foodNet} 🌾</span></div><div class="row"><span>Mine et marché</span><b>+${rates.gold} 🪙/h</b></div><div class="row"><span>Récoltes</span><b>+${rates.foodGross} 🌾/h</b></div><div class="row"><span>Consommation</span><b>−${rates.foodUse} 🌾/h</b></div></div>
       <div class="row"><span>Travailleurs disponibles</span><b class="${free?'positive':''}">${free}</b></div>
       ${[['mine','⛏️ Mine'],['farm','🌾 Fermes'],['forge','⚒️ Forge']].map(([key,label])=>`<div class="workerLine"><span>${label}</span><div class="workerControls"><button onclick="EE.assignWorker('${key}',-1)">−</button><b>${S.kingdom.workers[key]}</b><button ${free<=0?'disabled':''} onclick="EE.assignWorker('${key}',1)">+</button></div></div>`).join('')}
-      <button class="secondaryButton" ${S.kingdom.population>=populationCap()||S.gold<300||S.food<220?'disabled':''} onclick="EE.recruitSubject()">ACCUEILLIR UN SUJET — 300 🪙 + 220 🌾</button><p class="sheetLead" style="margin-top:9px">Les ouvriers améliorent la production. Les forgerons ajoutent 15 puissance chacun.</p>`;
-    if(tab==='buildings') body=`<p class="sheetLead">Chaque choix façonne votre économie. Les bâtiments secondaires ne peuvent dépasser le Château que d’un niveau.</p>${Object.entries(BUILDING_DATA).map(([key,b])=>`<div class="orderCard"><div class="balanceHead"><b>${b.icon} ${b.name}</b><span>Niv. ${S.buildings[key]}</span></div><p>${buildingBonus(key)}</p><button onclick="EE.showBuilding('${key}')">DÉTAILS • ${buildingCost(key)} 🪙 + ${buildingFoodCost(key)} 🌾</button></div>`).join('')}`;
+      <button class="secondaryButton" ${S.kingdom.population>=populationCap()||S.gold<300||S.food<220?'disabled':''} onclick="EE.recruitSubject()">ACCUEILLIR UN SUJET — 300 🪙 + 220 🌾</button><button class="raidShortcut" onclick="EE.showKingdom('guard')"><span>⚔️</span><div><b>GARDE ET RAIDS</b><small>${armySize()} unités • ${defensePower()} défense</small></div><i>›</i></button><p class="sheetLead" style="margin-top:9px">Les ouvriers améliorent la production. Les forgerons ajoutent 15 puissance chacun.</p>`;
+    if(tab==='buildings') body=`<div class="builderStrip"><div><span>🔨</span><b>${availableBuilders()}/${builderCount()} bâtisseurs libres</b><small>Les travaux continuent même hors connexion</small></div></div><p class="sheetLead">Chaque choix façonne votre économie. Les bâtiments secondaires ne peuvent dépasser le Château que d’un niveau.</p>${Object.entries(BUILDING_DATA).map(([key,b])=>{const job=activeConstruction(key);return `<div class="orderCard ${job?'buildingActive':''}"><div class="balanceHead"><b>${b.icon} ${b.name}</b><span>${job?`🔨 <i class="liveTimer" data-ends="${job.endsAt}">${formatDuration(job.endsAt-Date.now())}</i>`:`Niv. ${S.buildings[key]}`}</span></div><p>${job?`Amélioration vers le niveau ${job.target}`:buildingBonus(key)}</p><button onclick="EE.showBuilding('${key}')">${job?'VOIR LE CHANTIER':`DÉTAILS • ${buildingCost(key)} 🪙 + ${buildingFoodCost(key)} 🌾`}</button></div>`}).join('')}`;
+    if(tab==='guard'){const target=S.kingdom.raidTarget,last=S.kingdom.lastRaid,cooldown=Math.max(0,S.kingdom.raidCooldownUntil-Date.now()),shield=Math.max(0,S.kingdom.shieldUntil-Date.now());body=`<p class="sheetLead">Entraînez une garde permanente, protégez Astra et lancez des raids courts contre des domaines rivaux.</p>
+      <div class="statGrid"><div class="stat"><small>UNITÉS</small><b>${armySize()}</b></div><div class="stat"><small>ASSAUT</small><b>${armyPower()}⚔</b></div><div class="stat"><small>DÉFENSE</small><b>${defensePower()}🛡</b></div></div>
+      <div class="warStatus"><span>${shield?`🛡 Bouclier ${formatDuration(shield)}`:'⚠ Domaine exposé'}</span><span>${cooldown?`Raid dans ${formatDuration(cooldown)}`:`${S.kingdom.raidWins}V / ${S.kingdom.raidLosses}D`}</span></div>
+      <div class="sheetEyebrow sectionTitle">ENTRAÎNEMENT • ${S.kingdom.trainingQueue.length}/${trainingCapacity()}</div>
+      ${Object.entries(TROOP_DATA).map(([key,t])=>`<div class="troopCard"><div class="troopIcon" style="border-color:${t.color}">${t.icon}</div><div><b>${t.name} <em>x${S.kingdom.army[key]||0}</em></b><small>${t.power} puissance • ${t.time}s</small><p>${t.desc}</p></div><button ${S.gold<t.gold||S.food<t.food||S.kingdom.trainingQueue.length>=trainingCapacity()?'disabled':''} onclick="EE.trainTroop('${key}')">＋<small>${t.gold}🪙 ${t.food}🌾</small></button></div>`).join('')}
+      ${S.kingdom.trainingQueue.length?`<div class="trainingQueue">${S.kingdom.trainingQueue.map((job,i)=>`<div><span>${i===0?'⚔️':'⏳'} ${TROOP_DATA[job.type].name}</span><b class="liveTimer" data-ends="${job.endsAt}">${formatDuration(job.endsAt-Date.now())}</b>${i===0?`<button onclick="EE.speedUpTraining('${job.id}')">⚡</button>`:''}</div>`).join('')}</div>`:''}
+      <div class="sheetEyebrow sectionTitle">RAID DE DOMAINE</div>
+      ${target?`<div class="raidTarget"><div class="raidTargetHead"><span>🏴</span><div><b>${target.name}</b><small>Défense estimée : ${target.power}</small></div><em class="${armyPower()+teamPower()*.24>=target.power?'positive':'negative'}">${armyPower()+teamPower()*.24>=target.power?'FAVORABLE':'RISQUÉ'}</em></div><div class="lootRow"><span>Butin potentiel</span><b>${target.gold} 🪙 + ${target.food} 🌾</b></div><button class="primaryButton dangerButton" ${armySize()<1||cooldown||S.energy<5?'disabled':''} onclick="EE.launchRaid()">${cooldown?`ARMÉE EN RETOUR • ${formatDuration(cooldown)}`:armySize()<1?'ENTRAÎNEZ UNE UNITÉ':'LANCER LE RAID — 5 ⚡'}</button><button class="secondaryButton" ${S.gold<80?'disabled':''} onclick="EE.scoutRaid()">CHERCHER UN AUTRE — 80 🪙</button></div>`:`<div class="raidEmpty"><span>🗺️</span><b>Explorer les Marches</b><p>Trouvez une cible dont les réserves et la défense correspondent à votre garde.</p><button ${S.gold<80?'disabled':''} onclick="EE.scoutRaid()">RECHERCHER — 80 🪙</button></div>`}
+      ${last?`<div class="battleReport ${last.won?'win':'loss'}"><b>${last.won?'✓ VICTOIRE':'✕ DÉFAITE'} • ${last.target}</b><p>${last.defense?'Rapport de défense':`Force ${last.strike} contre ${last.enemy}`}${last.won&&!last.defense?` • +${last.gold} 🪙 +${last.food} 🌾`:''}</p></div>`:''}`;}
     if(tab==='council') body=`<p class="sheetLead">Promulguez un décret selon votre stratégie, puis répondez aux besoins du royaume pour gagner de la prospérité.</p>${['balance','harvest','trade','war'].map(key=>{const x=decreeData(key),active=S.kingdom.decree===key;return `<div class="decreeCard ${active?'active':''}"><b>${x.icon} ${x.name}</b><p>${x.desc}</p>${active?'<p class="positive">✓ Décret en vigueur</p>':`<button onclick="EE.setDecree('${key}')">PROMULGUER</button>`}</div>`}).join('')}<div class="sheetEyebrow" style="margin-top:16px">REQUÊTES DU PEUPLE</div>${KINGDOM_ORDERS.map(o=>{const done=S.kingdom.orders[o.id],ready=S.gold>=o.gold&&S.food>=o.food;return `<div class="orderCard ${ready&&!done?'ready':''}"><b>${o.icon} ${o.name}</b><p>${o.text}</p><p>Coût : ${o.gold} 🪙 + ${o.food} 🌾</p><p class="orderReward">Récompense : ${o.reward}</p>${done?'<p class="positive">✓ Requête accomplie</p>':`<button ${!ready?'disabled':''} onclick="EE.fulfillOrder('${o.id}')">HONORER LA REQUÊTE</button>`}</div>`}).join('')}<div class="sheetEyebrow" style="margin-top:16px">PALIERS DE PROSPÉRITÉ</div>${[[50,'Bourg florissant','+5% production'],[120,'Cité rayonnante','+10% production • +6% puissance'],[250,'Capitale éternelle','+15% production • +9% puissance']].map(([need,name,reward])=>`<div class="milestone ${S.kingdom.prosperity<need?'locked':''}"><span>${S.kingdom.prosperity>=need?'✓':'♛'}</span><div><b>${name} — ${need}</b><p>${reward}</p><div class="miniProgress"><i style="width:${Math.min(100,S.kingdom.prosperity/need*100)}%"></i></div></div></div>`).join('')}`;
     showSheet(`<div class="sheetEyebrow">INTENDANCE D’ASTRA</div><h2 class="sheetTitle">Le royaume vivant</h2>${tabs}${body}`);
   }
@@ -589,7 +660,8 @@
   // =========================================================
   const stars=Array.from({length:95},()=>({x:Math.random(),y:Math.random(),s:.4+Math.random()*1.5,p:Math.random()*6.28}));
   const clouds=Array.from({length:7},(_,i)=>({x:Math.random(),y:.12+Math.random()*.32,s:.55+Math.random()*.8,v:3+Math.random()*4,p:i}));
-  const walkers=Array.from({length:8},(_,i)=>({x:Math.random(),y:.68+Math.random()*.18,v:(i%2?1:-1)*(5+Math.random()*7),color:pick(['#b95b55','#486da5','#c89b48','#735c9c'])}));
+  const citizenRoles=['guard','farmer','merchant','mage','builder','ranger'];
+  const walkers=Array.from({length:10},(_,i)=>({x:Math.random(),y:.66+Math.random()*.2,v:(i%2?1:-1)*(4+Math.random()*6),color:pick(['#bd6260','#557ec1','#d0a44f','#8668b4','#4c9b7b']),role:citizenRoles[i%citizenRoles.length],seed:Math.random()*8}));
   function rounded(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
   function text(txt,x,y,size,color='#fff',align='center',font='Inter',weight=700){ctx.fillStyle=color;ctx.textAlign=align;ctx.font=`${weight} ${size}px ${font}`;ctx.fillText(txt,x,y);}
   function gradient(top,bottom){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,top);g.addColorStop(1,bottom);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
@@ -613,7 +685,7 @@
     drawCastle(W*.47,H*.57,1.12+S.buildings.castle*.045,t);
     drawMine(W*.13,H*.66,.84,t);drawForge(W*.80,H*.61,.78,t);drawGuild(W*.16,H*.83,.68,t);drawFarm(W*.50,H*.82,.72,t);drawMarket(W*.80,H*.82,.66,t);
     // habitants
-    for(const p of walkers){p.x+=p.v*dt/W;if(p.x<-.05)p.x=1.05;if(p.x>1.05)p.x=-.05;drawTinyPerson(p.x*W,p.y*H,p.color,t+p.x*9);}
+    for(const p of walkers){p.x+=p.v*dt/W;if(p.x<-.05)p.x=1.05;if(p.x>1.05)p.x=-.05;drawTinyPerson(p.x*W,p.y*H,p,t);}
     // points interactifs
     const basePulse=1+Math.sin(t*.004)*.06;
     const defs=[['castle',W*.47,H*.45,'CHÂTEAU'],['mine',W*.13,H*.62,'MINE'],['forge',W*.80,H*.56,'FORGE'],['guild',W*.16,H*.79,'HÉROS'],['farm',W*.50,H*.78,'FERMES'],['market',W*.80,H*.78,'MARCHÉ']];
@@ -643,8 +715,9 @@
       hotspots.push({type:'building',key,x:p.x,y:p.y,r:key==='castle'?58:44});
       ctx.globalAlpha=.16+pulse*.08;ctx.strokeStyle=color;ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(p.x,p.y+12,key==='castle'?48:31,key==='castle'?17:11,0,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
       ctx.save();ctx.translate(lx,ly);ctx.fillStyle='rgba(9,7,24,.88)';rounded(-38,-12,76,24,10);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1;ctx.stroke();ctx.fillStyle=color;ctx.beginPath();ctx.arc(-29,0,3,0,Math.PI*2);ctx.fill();text(label,4,3,8,'#f8f4ff','center','Cinzel',800);ctx.fillStyle='rgba(9,7,24,.96)';ctx.beginPath();ctx.arc(32,-9,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.stroke();text(String(S.buildings[key]),32,-6,7,color);ctx.restore();
+      const job=activeConstruction(key);if(job){const bx=clamp(p.x+27,18,W-18),by=p.y-10;ctx.fillStyle='rgba(20,13,30,.94)';ctx.strokeStyle='#f2c45e';ctx.lineWidth=2;ctx.beginPath();ctx.arc(bx,by,13+Math.sin(t*.006)*1.2,0,Math.PI*2);ctx.fill();ctx.stroke();text('🔨',bx,by+5,12,'#fff');}
     }
-    for(const p of walkers){p.x+=p.v*dt/W;if(p.x<-.05)p.x=1.05;if(p.x>1.05)p.x=-.05;drawTinyPerson(p.x*W,p.y*H,p.color,t+p.x*9);}
+    for(const p of walkers){p.x+=p.v*dt/W;if(p.x<-.05)p.x=1.05;if(p.x>1.05)p.x=-.05;drawTinyPerson(p.x*W,p.y*H,p,t);}
     if(S.production>=1){const p=imageCoverPoint(baseBackground,.15,.46),x=clamp(p.x+25,25,W-25),y=p.y-3;ctx.fillStyle='#f2c45e';ctx.shadowColor='#f2c45e';ctx.shadowBlur=14;ctx.beginPath();ctx.arc(x,y,15+Math.sin(t*.005)*1.5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;text('🪙',x,y+5,14,'#201401');hotspots.push({type:'collect',x,y,r:27});}
     drawParticles(dt);
   }
@@ -655,7 +728,14 @@
   function drawGuild(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#50485f';ctx.fillRect(-55,-30,110,70);ctx.fillStyle='#6f4a61';ctx.beginPath();ctx.moveTo(-65,-30);ctx.lineTo(0,-69);ctx.lineTo(65,-30);ctx.fill();ctx.fillStyle='#282139';ctx.fillRect(-14,2,28,38);ctx.strokeStyle='#f2c45e';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,-42);ctx.lineTo(7,-25);ctx.moveTo(7,-42);ctx.lineTo(-7,-25);ctx.stroke();ctx.restore();}
   function drawFarm(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#4c3a32';ctx.fillRect(-31,-24,62,58);ctx.fillStyle='#8d5444';ctx.beginPath();ctx.moveTo(-42,-24);ctx.lineTo(0,-55);ctx.lineTo(42,-24);ctx.fill();ctx.fillStyle='#241c25';ctx.fillRect(-9,7,18,27);ctx.strokeStyle='#d2aa4f';ctx.lineWidth=2;for(let i=-48;i<=48;i+=12){ctx.beginPath();ctx.moveTo(i,42);ctx.quadraticCurveTo(i+4,22+Math.sin(t*.003+i)*2,i+7,15);ctx.stroke();}ctx.restore();}
   function drawMarket(x,y,s,t){ctx.save();ctx.translate(x,y);ctx.scale(s,s);for(const dx of[-30,20]){ctx.fillStyle=dx<0?'#a74858':'#4d70a5';ctx.fillRect(dx,-20,38,45);ctx.fillStyle='#e7c77c';ctx.beginPath();ctx.moveTo(dx-5,-20);ctx.lineTo(dx+19,-44);ctx.lineTo(dx+43,-20);ctx.fill();}ctx.strokeStyle='#e5bd5d';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-38,31);ctx.lineTo(54,31);ctx.stroke();ctx.fillStyle='#f1cf70';ctx.globalAlpha=.6+.3*Math.sin(t*.005);ctx.beginPath();ctx.arc(10,-49,5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.restore();}
-  function drawTinyPerson(x,y,color,t){ctx.save();ctx.translate(x,y);const b=Math.sin(t*6)*1.5;ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(0,4,5,2,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.fillRect(-3,-8+b,6,10);ctx.fillStyle='#dcb894';ctx.beginPath();ctx.arc(0,-11+b,3,0,Math.PI*2);ctx.fill();ctx.restore();}
+  function drawTinyPerson(x,y,p,t){ctx.save();ctx.translate(x,y);const dir=p.v>=0?1:-1,b=Math.sin(t*.012+p.seed)*1.2,step=Math.sin(t*.018+p.seed)*2.2;ctx.scale(1.12,1.12);ctx.fillStyle='rgba(0,0,0,.34)';ctx.beginPath();ctx.ellipse(0,5,7,2.6,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#201b2b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-2,0+b);ctx.lineTo(-3+step,5);ctx.moveTo(2,0+b);ctx.lineTo(3-step,5);ctx.stroke();ctx.fillStyle=darken(p.color,.28);ctx.beginPath();ctx.moveTo(-5,-7+b);ctx.lineTo(5,-7+b);ctx.lineTo(6,1+b);ctx.lineTo(0,3+b);ctx.lineTo(-6,1+b);ctx.closePath();ctx.fill();ctx.fillStyle=p.color;ctx.beginPath();ctx.moveTo(-4,-8+b);ctx.lineTo(4,-8+b);ctx.lineTo(3,0+b);ctx.lineTo(-3,0+b);ctx.closePath();ctx.fill();ctx.fillStyle='#e4bd98';ctx.beginPath();ctx.arc(0,-11+b,3.5,0,Math.PI*2);ctx.fill();
+    if(p.role==='guard'){ctx.fillStyle='#8e97aa';ctx.beginPath();ctx.arc(0,-12+b,4,Math.PI,0);ctx.lineTo(4,-10+b);ctx.lineTo(-4,-10+b);ctx.fill();ctx.fillStyle='#6d82b8';ctx.beginPath();ctx.arc(-5*dir,-3+b,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#d7dbe4';ctx.beginPath();ctx.moveTo(5*dir,-5+b);ctx.lineTo(9*dir,-12+b);ctx.stroke();}
+    else if(p.role==='farmer'){ctx.fillStyle='#d6b45a';ctx.fillRect(-5,-14+b,10,2);ctx.beginPath();ctx.arc(0,-13+b,3,Math.PI,0);ctx.fill();ctx.strokeStyle='#9a7545';ctx.beginPath();ctx.moveTo(5*dir,-6+b);ctx.lineTo(8*dir,3+b);ctx.moveTo(5*dir,-4+b);ctx.lineTo(10*dir,-1+b);ctx.stroke();}
+    else if(p.role==='merchant'){ctx.fillStyle='#80503a';ctx.fillRect(-6*dir,-7+b,4,8);ctx.fillStyle='#f2c45e';ctx.beginPath();ctx.arc(4*dir,-3+b,1.5,0,Math.PI*2);ctx.fill();}
+    else if(p.role==='mage'){ctx.fillStyle='#47325f';ctx.beginPath();ctx.moveTo(-5,-13+b);ctx.lineTo(0,-20+b);ctx.lineTo(5,-13+b);ctx.fill();ctx.strokeStyle='#a877e8';ctx.beginPath();ctx.moveTo(6*dir,-7+b);ctx.lineTo(7*dir,2+b);ctx.stroke();ctx.fillStyle='#c7a3ff';ctx.beginPath();ctx.arc(6*dir,-9+b,2,0,Math.PI*2);ctx.fill();}
+    else if(p.role==='builder'){ctx.fillStyle='#926443';ctx.fillRect(-4,-15+b,8,2);ctx.strokeStyle='#d2aa6b';ctx.beginPath();ctx.moveTo(5*dir,-7+b);ctx.lineTo(9*dir,-1+b);ctx.moveTo(6*dir,-7+b);ctx.lineTo(10*dir,-10+b);ctx.stroke();}
+    else{ctx.strokeStyle='#d7c08a';ctx.beginPath();ctx.arc(6*dir,-4+b,5,-1.4,1.4);ctx.stroke();ctx.beginPath();ctx.moveTo(6*dir,-9+b);ctx.lineTo(6*dir,1+b);ctx.stroke();}
+    ctx.restore();}
 
   function drawMap(t,dt){
     hotspots=[];gradient('#172339','#351f47');drawStars(t,.35,.4);
@@ -782,7 +862,7 @@
   // Boucle principale
   // =========================================================
   function updateTiming(now){if(!timing||timing.resolved)return;const elapsed=now-timing.start;const phase=(elapsed%1500)/1500;timing.scale=2.5-1.75*phase;$('timingRing').style.transform=`scale(${timing.scale})`;if(elapsed>timing.duration)resolveTiming(true);}
-  function updateProduction(dt){productionAccumulator+=dt;if(productionAccumulator>=1){const seconds=Math.floor(productionAccumulator);productionAccumulator-=seconds;const rates=kingdomRates(),cap=Math.max(1,rates.gold*8);S.production=Math.min(cap,(S.production||0)+rates.gold/3600*seconds);S.food=Math.max(0,S.food+rates.foodNet/3600*seconds);if(S.food<=0&&rates.foodNet<0)S.kingdom.morale=Math.max(15,S.kingdom.morale-seconds/450);else if(rates.foodNet>0&&S.food>100)S.kingdom.morale=Math.min(100,S.kingdom.morale+seconds/7200);$('food').textContent=formatNumber(S.food);$('kingdomPulse').textContent=`${S.kingdom.population}/${populationCap()} sujets • ${rates.foodNet>=0?'+':''}${rates.foodNet} 🌾/h`;}}
+  function updateProduction(dt){productionAccumulator+=dt;if(productionAccumulator>=1){const seconds=Math.floor(productionAccumulator);productionAccumulator-=seconds;const now=Date.now(),rates=kingdomRates(),cap=Math.max(1,rates.gold*8);S.production=Math.min(cap,(S.production||0)+rates.gold/3600*seconds);S.food=Math.max(0,S.food+rates.foodNet/3600*seconds);if(S.food<=0&&rates.foodNet<0)S.kingdom.morale=Math.max(15,S.kingdom.morale-seconds/450);else if(rates.foodNet>0&&S.food>100)S.kingdom.morale=Math.min(100,S.kingdom.morale+seconds/7200);processKingdomTimers(now,false);maybeResolveDefense(now);document.querySelectorAll('.liveTimer[data-ends]').forEach(el=>el.textContent=formatDuration(Number(el.dataset.ends)-now));$('food').textContent=formatNumber(S.food);$('kingdomPulse').textContent=`${S.kingdom.population}/${populationCap()} sujets • ${rates.foodNet>=0?'+':''}${rates.foodNet} 🌾/h`;}}
   function frame(now){let dt=Math.min(.05,(now-lastFrame)/1000||0);lastFrame=now;updateProduction(dt);updateTiming(now);if(scene==='battle')updateBattle(dt);else sceneTime+=dt;
     ctx.save();if(shake>0){ctx.translate(rand(-shake,shake),rand(-shake,shake));shake=Math.max(0,shake-30*dt);}if(scene==='base')drawBase(now,dt);else if(scene==='map')drawMap(now,dt);else if(scene==='heroes')drawHeroes(now,dt);else if(scene==='portal')drawPortal(now,dt);else if(scene==='battle'&&battle)drawBattle(now,dt);ctx.restore();requestAnimationFrame(frame);}
 
@@ -798,15 +878,15 @@
   function showOffline(){if(!pendingOffline)return;const foodText=pendingOffline.food>=0?`les fermes ont ajouté ${pendingOffline.food} provisions`:`le peuple a consommé ${Math.abs(pendingOffline.food)} provisions`;$('offlineText').textContent=`Pendant ${pendingOffline.minutes} minutes, le domaine a produit ${pendingOffline.gold} or, ${foodText} et récupéré ${pendingOffline.energy} énergie.`;$('offlineReward').classList.remove('hidden');}
 
   window.EE={
-    claimQuest,upgradeBuilding,collectProduction,upgradeHero,summon,startMission,
-    switchScene,showMission,showHeroesPanel,showPortalPanel,showBuilding,showKingdom,assignWorker,recruitSubject,setDecree,fulfillOrder,install:installApp,
+    claimQuest,upgradeBuilding,speedUpBuild,collectProduction,upgradeHero,summon,startMission,
+    switchScene,showMission,showHeroesPanel,showPortalPanel,showBuilding,showKingdom,assignWorker,recruitSubject,setDecree,fulfillOrder,trainTroop,speedUpTraining,scoutRaid,launchRaid,install:installApp,
     toggleSound(){S.sound=!S.sound;saveState();$('sheetClose').click();$('profileBtn').click();},
     toggleHaptics(){S.haptics=!S.haptics;saveState();$('sheetClose').click();$('profileBtn').click();}
   };
-  window.__EE_TEST__={getState:()=>JSON.parse(JSON.stringify(S)),getScene:()=>scene,getHotspots:()=>JSON.parse(JSON.stringify(hotspots)),baseArtReady:()=>!!(baseBackground.complete&&baseBackground.naturalWidth),teamPower,kingdomRates,showKingdom,assignWorker,setDecree,fulfillOrder,startMission,useSkill,triggerTiming,resolveTiming,finishBattle,switchScene,reset(){localStorage.removeItem(SAVE_KEY);location.reload();}};
+  window.__EE_TEST__={getState:()=>JSON.parse(JSON.stringify(S)),getScene:()=>scene,getHotspots:()=>JSON.parse(JSON.stringify(hotspots)),baseArtReady:()=>!!(baseBackground.complete&&baseBackground.naturalWidth),teamPower,kingdomRates,armyPower,defensePower,showKingdom,assignWorker,setDecree,fulfillOrder,upgradeBuilding,trainTroop,scoutRaid,launchRaid,processKingdomTimers,completeTimers(){S.kingdom.buildQueue.forEach(x=>x.endsAt=0);S.kingdom.trainingQueue.forEach(x=>x.endsAt=0);return processKingdomTimers(Date.now(),false);},startMission,useSkill,triggerTiming,resolveTiming,finishBattle,switchScene,reset(){localStorage.removeItem(SAVE_KEY);location.reload();}};
 
   // Démarrage
-  refreshHUD();switchScene('base');
+  processKingdomTimers(Date.now(),true);refreshHUD();switchScene('base');
   if(captureMode){
     S.tutorialSeen=true;
     if(captureMode==='battle'){setTimeout(()=>startMission(1),120);}

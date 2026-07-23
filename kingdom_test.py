@@ -44,29 +44,43 @@ async def main():
         await asyncio.sleep(1.2)
         initial = await evaluate("({state:__EE_TEST__.getState(),rates:__EE_TEST__.kingdomRates(),power:__EE_TEST__.teamPower(),art:__EE_TEST__.baseArtReady(),buildings:__EE_TEST__.getHotspots().filter(h=>h.type==='building').map(h=>h.key).sort()})")
         base_image = await send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': False})
-        with open('/root/empire-eternal/v5-citadel-mobile.png', 'wb') as handle:
+        with open('/root/empire-eternal/v6-citadel-mobile.png', 'wb') as handle:
             handle.write(base64.b64decode(base_image['result']['data']))
         await evaluate("__EE_TEST__.showKingdom('overview')")
         await asyncio.sleep(.15)
         overview = await evaluate("({open:!document.getElementById('sheet').classList.contains('hidden'),tabs:document.querySelectorAll('.kingdomTabs button').length,workers:document.querySelectorAll('.workerLine').length,title:document.querySelector('.sheetTitle').textContent})")
         image = await send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': False})
-        with open('/root/empire-eternal/v5-kingdom-mobile.png', 'wb') as handle:
+        with open('/root/empire-eternal/v6-kingdom-mobile.png', 'wb') as handle:
             handle.write(base64.b64decode(image['result']['data']))
         await evaluate("__EE_TEST__.assignWorker('mine',1);__EE_TEST__.setDecree('trade')")
         changed = await evaluate("({state:__EE_TEST__.getState(),rates:__EE_TEST__.kingdomRates(),power:__EE_TEST__.teamPower()})")
         await evaluate("__EE_TEST__.fulfillOrder('granary')")
         order = await evaluate("({state:__EE_TEST__.getState(),council:document.getElementById('sheetContent').textContent.includes('Requête accomplie')})")
+        await evaluate("__EE_TEST__.upgradeBuilding('mine');__EE_TEST__.trainTroop('guard')")
+        queued = await evaluate("({state:__EE_TEST__.getState(),buildersText:document.getElementById('sheetContent').textContent.includes('ENTRAÎNEMENT')})")
+        await evaluate("__EE_TEST__.completeTimers();__EE_TEST__.scoutRaid();__EE_TEST__.showKingdom('guard')")
+        guard = await evaluate("({state:__EE_TEST__.getState(),army:__EE_TEST__.armyPower(),defense:__EE_TEST__.defensePower(),troops:document.querySelectorAll('.troopCard').length,target:document.querySelector('.raidTarget')!==null,tabs:document.querySelectorAll('.kingdomTabs button').length})")
+        guard_image = await send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': False})
+        with open('/root/empire-eternal/v6-guard-mobile.png', 'wb') as handle:
+            handle.write(base64.b64decode(guard_image['result']['data']))
+        await evaluate("__EE_TEST__.launchRaid()")
+        raided = await evaluate("({state:__EE_TEST__.getState(),report:document.querySelector('.battleReport')!==null})")
         checks = {
-            'v5_state': initial['state']['version'] == 5 and initial['state']['food'] >= 899,
+            'v6_state': initial['state']['version'] == 6 and initial['state']['food'] >= 899,
             'painted_citadel': initial['art'] and initial['buildings'] == ['castle', 'farm', 'forge', 'guild', 'market', 'mine'],
             'economy_positive': initial['rates']['gold'] > 0 and initial['rates']['foodNet'] > 0,
-            'dashboard': overview == {'open': True, 'tabs': 3, 'workers': 3, 'title': 'Le royaume vivant'},
+            'dashboard': overview == {'open': True, 'tabs': 4, 'workers': 3, 'title': 'Le royaume vivant'},
             'worker_assignment': changed['state']['kingdom']['workers']['mine'] == 5,
             'decree_effect': changed['state']['kingdom']['decree'] == 'trade' and changed['rates']['gold'] > initial['rates']['gold'],
             'order': order['state']['kingdom']['orders'].get('granary') is True and order['state']['kingdom']['prosperity'] >= 18 and order['council'],
+            'construction_queue': len(queued['state']['kingdom']['buildQueue']) == 1 and queued['state']['buildings']['mine'] == 1,
+            'training_queue': len(queued['state']['kingdom']['trainingQueue']) == 1 and queued['buildersText'],
+            'timer_completion': guard['state']['buildings']['mine'] == 2 and guard['state']['kingdom']['army']['guard'] == 1,
+            'guard_ui': guard['troops'] == 3 and guard['target'] and guard['tabs'] == 4 and guard['army'] > 0 and guard['defense'] > 0,
+            'raid_loop': raided['state']['kingdom']['raidTarget'] is None and raided['state']['kingdom']['raidCooldownUntil'] > 0 and raided['report'],
             'no_runtime_errors': not errors,
         }
-        print(json.dumps({'initial': initial, 'changedRates': changed['rates'], 'overview': overview, 'order': order, 'checks': checks, 'passed': all(checks.values()), 'errors': errors}, ensure_ascii=False, indent=2))
+        print(json.dumps({'initial': initial, 'changedRates': changed['rates'], 'overview': overview, 'order': order, 'queued': queued, 'guard': guard, 'raided': raided, 'checks': checks, 'passed': all(checks.values()), 'errors': errors}, ensure_ascii=False, indent=2))
         task.cancel()
         if not all(checks.values()):
             raise SystemExit(1)

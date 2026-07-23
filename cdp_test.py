@@ -92,7 +92,7 @@ async def main():
         await evaluate("__EE_TEST__.switchScene('portal');EE.summon()")
         await asyncio.sleep(1.6)
         results['portal'] = await evaluate("({pulls:__EE_TEST__.getState().portalPulls,free:__EE_TEST__.getState().freePullDate,heroes:__EE_TEST__.getState().heroes.length})")
-        await evaluate("EE.upgradeBuilding('castle')")
+        await evaluate("__EE_TEST__.upgradeBuilding('castle');__EE_TEST__.completeTimers()")
         results['building'] = await evaluate("({level:__EE_TEST__.getState().buildings.castle,upgrades:__EE_TEST__.getState().upgrades})")
 
         results['sw'] = await evaluate("navigator.serviceWorker.ready.then(r=>({active:!!r.active,scope:r.scope}))", True)
