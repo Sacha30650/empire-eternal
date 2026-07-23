@@ -194,6 +194,10 @@
   forestBackground.decoding = 'async';
   forestBackground.src = 'assets/environments/forest.webp';
   battleBackgrounds.forest = forestBackground;
+  const ruinsBackground = new Image();
+  ruinsBackground.decoding = 'async';
+  ruinsBackground.src = 'assets/environments/ruins.webp';
+  battleBackgrounds.ruins = ruinsBackground;
 
   function resize() {
     DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -713,7 +717,7 @@
     if(paintedReady){drawImageCover(painted,0,0,W,H);ctx.fillStyle='rgba(5,8,15,.14)';ctx.fillRect(0,0,W,H);}else gradient(pal[0],pal[1]);
     // terrain et perspective
     if(!paintedReady){const floor=ctx.createRadialGradient(W*.5,H*.53,25,W*.5,H*.53,W*.7);floor.addColorStop(0,'rgba(184,164,220,.11)');floor.addColorStop(.58,'rgba(28,21,47,.03)');floor.addColorStop(1,'rgba(5,4,13,.34)');ctx.fillStyle=floor;ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,.035)';for(let i=0;i<95;i++){const x=(i*97)%W,y=105+(i*53)%(H-205),r=1+(i%3);ctx.beginPath();ctx.ellipse(x,y,r*1.7,r*.65,(i%7)*.31,0,Math.PI*2);ctx.fill();}ctx.strokeStyle='rgba(210,194,238,.055)';ctx.lineWidth=1;for(let i=0;i<10;i++){const x=(i*79)%W,y=140+(i*113)%(H-260);ctx.beginPath();ctx.moveTo(x-13,y+4);ctx.quadraticCurveTo(x,y-4,x+18,y+2);ctx.stroke();}}
-    if(!paintedReady&&(node.biome==='forest'||node.biome==='meadow')){for(let i=0;i<9;i++)drawBattleTree((i*83)%W,140+(i*119)%(H-270),.45+(i%3)*.09);}if(node.biome==='ruins'||node.biome==='ash'){for(let i=0;i<6;i++)drawRuin((i*103)%W,160+(i*97)%(H-270),.55);}if(node.biome==='void'||node.biome==='cosmic'){drawStars(t,.55,1);}
+    if(!paintedReady&&(node.biome==='forest'||node.biome==='meadow')){for(let i=0;i<9;i++)drawBattleTree((i*83)%W,140+(i*119)%(H-270),.45+(i%3)*.09);}if(!paintedReady&&(node.biome==='ruins'||node.biome==='ash')){for(let i=0;i<6;i++)drawRuin((i*103)%W,160+(i*97)%(H-270),.55);}if(node.biome==='void'||node.biome==='cosmic'){drawStars(t,.55,1);}
     // projectiles
     for(const p of projectiles){const q=1-p.life/p.max;const tx=p.tx.x,ty=p.tx.y-18;let x=lerp(p.x,tx,q),y=lerp(p.y,ty,q);if(p.arc)y-=Math.sin(q*Math.PI)*70;ctx.strokeStyle=p.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-(tx-p.x)*.035,y-(ty-p.y)*.035);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();}
     const alive=battle.units.filter(u=>!u.dead).sort((a,b)=>a.y-b.y);for(const u of alive)drawFighter(u,t);

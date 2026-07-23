@@ -46,3 +46,5 @@ Puis ouvrir `http://127.0.0.1:8080/`.
 Les unités de combat principales utilisent des sprites dark fantasy 2.5D originaux dans `assets/units/`, le Bois des murmures dispose d’un décor peint optimisé dans `assets/environments/` et les compétences utilisent des icônes dédiées dans `assets/ui/skills/`. Un rendu procédural de secours reste actif pour les héros, boss et biomes qui ne disposent pas encore d’un asset.
 
 La Citadelle utilise désormais un décor nocturne 2.5D peint, optimisé en WebP, avec six points d’intérêt alignés sur les zones tactiles du Canvas. Des halos, brumes, lucioles, habitants et marqueurs de niveau restent animés en temps réel au-dessus du décor. Le rendu géométrique précédent sert automatiquement de secours si l’image ne peut pas être chargée.
+
+Les combats du biome Ruines utilisent également un décor vertical peint dédié : architecture gothique brisée, sol d’obsidienne, brume violette et zone tactique centrale dégagée. L’asset WebP est préchargé par le Service Worker et le terrain procédural reste disponible en secours.

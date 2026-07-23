@@ -1,11 +1,11 @@
-const CACHE = 'empire-eternal-v5.1.1';
+const CACHE = 'empire-eternal-v5.2.0';
 const APP_SHELL = [
   './', './index.html', './styles.css', './game.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
   './assets/units/allies/maeve.png', './assets/units/allies/lyra.png',
   './assets/units/allies/orion.png', './assets/units/enemies/brute.png',
   './assets/units/enemies/raider.png', './assets/units/enemies/caster.png',
-  './assets/environments/forest.webp', './assets/environments/citadel.webp', './assets/ui/skills/bulwark.png',
+  './assets/environments/forest.webp', './assets/environments/citadel.webp', './assets/environments/ruins.webp', './assets/ui/skills/bulwark.png',
   './assets/ui/skills/volley.png', './assets/ui/skills/nova.png'
 ];
 
