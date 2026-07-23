@@ -1,7 +1,7 @@
 {
   "name":"Empire Eternal — La Fracture",
   "short_name":"Empire Eternal",
-  "description":"Bâtis ta citadelle, commande tes héros et fracture le temps.",
+  "description":"Gouverne ton royaume, commande tes héros et fracture le temps.",
   "id":"/empire-eternal/",
   "start_url":"./?source=pwa",
   "scope":"./",
