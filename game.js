@@ -712,7 +712,7 @@
     const painted=battleBackgrounds[node.biome],paintedReady=painted&&painted.complete&&painted.naturalWidth;
     if(paintedReady){drawImageCover(painted,0,0,W,H);ctx.fillStyle='rgba(5,8,15,.14)';ctx.fillRect(0,0,W,H);}else gradient(pal[0],pal[1]);
     // terrain et perspective
-    if(!paintedReady){ctx.fillStyle='rgba(255,255,255,.025)';for(let i=0;i<130;i++){const x=(i*97)%W,y=100+(i*53)%(H-190);ctx.fillRect(x,y,2,4);}ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=2;for(let i=0;i<8;i++){const y=H*.24+i*70;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y+12);ctx.stroke();}}
+    if(!paintedReady){const floor=ctx.createRadialGradient(W*.5,H*.53,25,W*.5,H*.53,W*.7);floor.addColorStop(0,'rgba(184,164,220,.11)');floor.addColorStop(.58,'rgba(28,21,47,.03)');floor.addColorStop(1,'rgba(5,4,13,.34)');ctx.fillStyle=floor;ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,.035)';for(let i=0;i<95;i++){const x=(i*97)%W,y=105+(i*53)%(H-205),r=1+(i%3);ctx.beginPath();ctx.ellipse(x,y,r*1.7,r*.65,(i%7)*.31,0,Math.PI*2);ctx.fill();}ctx.strokeStyle='rgba(210,194,238,.055)';ctx.lineWidth=1;for(let i=0;i<10;i++){const x=(i*79)%W,y=140+(i*113)%(H-260);ctx.beginPath();ctx.moveTo(x-13,y+4);ctx.quadraticCurveTo(x,y-4,x+18,y+2);ctx.stroke();}}
     if(!paintedReady&&(node.biome==='forest'||node.biome==='meadow')){for(let i=0;i<9;i++)drawBattleTree((i*83)%W,140+(i*119)%(H-270),.45+(i%3)*.09);}if(node.biome==='ruins'||node.biome==='ash'){for(let i=0;i<6;i++)drawRuin((i*103)%W,160+(i*97)%(H-270),.55);}if(node.biome==='void'||node.biome==='cosmic'){drawStars(t,.55,1);}
     // projectiles
     for(const p of projectiles){const q=1-p.life/p.max;const tx=p.tx.x,ty=p.tx.y-18;let x=lerp(p.x,tx,q),y=lerp(p.y,ty,q);if(p.arc)y-=Math.sin(q*Math.PI)*70;ctx.strokeStyle=p.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-(tx-p.x)*.035,y-(ty-p.y)*.035);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();}
@@ -720,7 +720,7 @@
     drawParticles(dt);
   }
   function drawBattleTree(x,y,s){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#252016';ctx.fillRect(-5,-2,10,35);ctx.fillStyle='#183829';for(const [dx,dy,r] of[[0,-20,25],[-17,-8,19],[17,-6,21]]){ctx.beginPath();ctx.arc(dx,dy,r,0,Math.PI*2);ctx.fill();}ctx.restore();}
-  function drawRuin(x,y,s){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='#55505d';ctx.fillRect(-18,-25,36,55);ctx.fillStyle='#383541';ctx.fillRect(-10,-12,10,20);ctx.clearRect(2,-25,12,18);ctx.restore();}
+  function drawRuin(x,y,s){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle='rgba(3,2,9,.32)';ctx.beginPath();ctx.ellipse(0,27,32,9,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3a3545';ctx.beginPath();ctx.moveTo(-31,24);ctx.lineTo(-22,9);ctx.lineTo(-5,14);ctx.lineTo(2,27);ctx.closePath();ctx.fill();ctx.fillStyle='#625c6d';ctx.fillRect(-13,-25,23,50);ctx.fillStyle='#7a7382';ctx.fillRect(-17,-28,31,8);ctx.fillStyle='#211e2c';ctx.fillRect(-7,-10,10,17);ctx.fillStyle='#4a4554';ctx.beginPath();ctx.moveTo(10,25);ctx.lineTo(17,4);ctx.lineTo(31,10);ctx.lineTo(28,25);ctx.closePath();ctx.fill();ctx.strokeStyle='rgba(22,18,31,.65)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-5,-22);ctx.lineTo(3,-13);ctx.lineTo(-1,-3);ctx.moveTo(19,9);ctx.lineTo(25,17);ctx.stroke();ctx.restore();}
   function drawFighter(u,t){
     ctx.save();ctx.translate(u.x,u.y);
     const moving=u.target&&!u.dead&&Math.hypot(u.target.x-u.x,u.target.y-u.y)>u.range;
